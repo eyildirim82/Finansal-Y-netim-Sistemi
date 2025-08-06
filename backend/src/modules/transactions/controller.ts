@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { validationResult } from 'express-validator';
@@ -21,8 +22,21 @@ export class TransactionController {
         search
       } = req.query;
 
-      const pageNum = parseInt(page as string);
-      const limitNum = parseInt(limit as string);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
       const skip = (pageNum - 1) * limitNum;
 
       // Filtreleme koşulları
@@ -113,7 +127,7 @@ export class TransactionController {
         }
       });
     } catch (error) {
-      console.error('İşlemler getirilirken hata:', error);
+      logError('İşlemler getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'İşlemler getirilirken bir hata oluştu'
@@ -169,7 +183,7 @@ export class TransactionController {
         data: transaction
       });
     } catch (error) {
-      console.error('İşlem getirilirken hata:', error);
+      logError('İşlem getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'İşlem getirilirken bir hata oluştu'
@@ -237,7 +251,7 @@ export class TransactionController {
         data: transaction
       });
     } catch (error) {
-      console.error('İşlem oluşturulurken hata:', error);
+      logError('İşlem oluşturulurken hata:', error);
       res.status(500).json({
         success: false,
         message: 'İşlem oluşturulurken bir hata oluştu'
@@ -327,7 +341,7 @@ export class TransactionController {
         data: transaction
       });
     } catch (error) {
-      console.error('İşlem güncellenirken hata:', error);
+      logError('İşlem güncellenirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'İşlem güncellenirken bir hata oluştu'
@@ -371,7 +385,7 @@ export class TransactionController {
         message: 'İşlem başarıyla silindi'
       });
     } catch (error) {
-      console.error('İşlem silinirken hata:', error);
+      logError('İşlem silinirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'İşlem silinirken bir hata oluştu'
@@ -457,7 +471,7 @@ export class TransactionController {
         }
       });
     } catch (error) {
-      console.error('İşlem istatistikleri getirilirken hata:', error);
+      logError('İşlem istatistikleri getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'İşlem istatistikleri getirilirken bir hata oluştu'
@@ -510,7 +524,7 @@ export class TransactionController {
         message: `${ids.length} işlem başarıyla silindi`
       });
     } catch (error) {
-      console.error('Toplu işlem silme hatası:', error);
+      logError('Toplu işlem silme hatası:', error);
       res.status(500).json({
         success: false,
         message: 'İşlemler silinirken bir hata oluştu'

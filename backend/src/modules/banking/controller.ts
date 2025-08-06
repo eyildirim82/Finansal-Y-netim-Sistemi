@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { YapiKrediFASTEmailService } from './emailService';
@@ -59,7 +60,7 @@ export class BankingController {
           });
 
         } catch (error) {
-          console.error('Email işleme hatası:', error);
+          logError('Email işleme hatası:', error);
         }
       }
 
@@ -77,7 +78,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Otomatik email çekme hatası:', error);
+      logError('Otomatik email çekme hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Email çekme sırasında hata oluştu',
@@ -140,7 +141,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Email işleme hatası:', error);
+      logError('Email işleme hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Email işlenirken hata oluştu'
@@ -152,7 +153,22 @@ export class BankingController {
   async getBankTransactions(req: Request, res: Response) {
     try {
       const { page = 1, limit = 20, direction, isMatched } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = {};
       if (direction) where.direction = direction;
@@ -168,7 +184,7 @@ export class BankingController {
         },
         orderBy: { transactionDate: 'desc' },
         skip,
-        take: Number(limit)
+        take: limitNum
       });
 
       const total = await prisma.bankTransaction.count({ where });
@@ -176,15 +192,15 @@ export class BankingController {
       res.json({
         transactions,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limitNum)
         }
       });
 
     } catch (error) {
-      console.error('Banka işlemleri getirme hatası:', error);
+      logError('Banka işlemleri getirme hatası:', error);
       res.status(500).json({ error: 'Banka işlemleri getirilemedi' });
     }
   }
@@ -193,8 +209,16 @@ export class BankingController {
   async getUnmatchedPayments(req: Request, res: Response) {
     try {
       const { limit = 50 } = req.query;
-      
-      const transactions = await this.matchingService.getUnmatchedTransactions(Number(limit));
+      const limitNum = Number(limit);
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const transactions = await this.matchingService.getUnmatchedTransactions(limitNum);
 
       res.json({
         success: true,
@@ -203,7 +227,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Eşleşmeyen ödemeler getirme hatası:', error);
+      logError('Eşleşmeyen ödemeler getirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Eşleşmeyen ödemeler getirilemedi'
@@ -269,7 +293,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Manuel eşleştirme hatası:', error);
+      logError('Manuel eşleştirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Manuel eşleştirme yapılamadı'
@@ -293,7 +317,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Email ayarları getirme hatası:', error);
+      logError('Email ayarları getirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Email ayarları getirilemedi'
@@ -314,7 +338,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Email bağlantı testi hatası:', error);
+      logError('Email bağlantı testi hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Email bağlantı testi yapılamadı'
@@ -333,7 +357,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Eşleştirme istatistikleri hatası:', error);
+      logError('Eşleştirme istatistikleri hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Eşleştirme istatistikleri getirilemedi'
@@ -345,8 +369,16 @@ export class BankingController {
   async runAutoMatching(req: Request, res: Response) {
     try {
       const { limit = 100 } = req.query;
-      
-      const unmatchedTransactions = await this.matchingService.getUnmatchedTransactions(Number(limit));
+      const limitNum = Number(limit);
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const unmatchedTransactions = await this.matchingService.getUnmatchedTransactions(limitNum);
       let matchedCount = 0;
 
       for (const transaction of unmatchedTransactions) {
@@ -367,7 +399,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Otomatik eşleştirme hatası:', error);
+      logError('Otomatik eşleştirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Otomatik eşleştirme çalıştırılamadı'
@@ -389,7 +421,7 @@ export class BankingController {
 
       return await this.emailService.parseYapiKrediFASTEmail(mockEmail);
     } catch (error) {
-      console.error('Email parse hatası:', error);
+      logError('Email parse hatası:', error);
       return null;
     }
   }

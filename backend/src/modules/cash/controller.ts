@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -49,7 +50,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa akışı oluşturma hatası:', error);
+      logError('Kasa akışı oluşturma hatası:', error);
       res.status(500).json({ error: 'Kasa akışı oluşturulamadı' });
     }
   }
@@ -59,7 +60,22 @@ export class CashController {
     try {
       const userId = (req as any).user.id;
       const { page = 1, limit = 20, startDate, endDate } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = { userId };
       
@@ -74,7 +90,7 @@ export class CashController {
         where,
         orderBy: { date: 'desc' },
         skip,
-        take: Number(limit)
+        take: limitNum
       });
 
       const total = await prisma.cashFlow.count({ where });
@@ -82,15 +98,15 @@ export class CashController {
       res.json({
         cashFlows,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limitNum)
         }
       });
 
     } catch (error) {
-      console.error('Kasa akışları listesi hatası:', error);
+      logError('Kasa akışları listesi hatası:', error);
       res.status(500).json({ error: 'Kasa akışları alınamadı' });
     }
   }
@@ -147,7 +163,7 @@ export class CashController {
       res.json(currentBalance);
 
     } catch (error) {
-      console.error('Kasa durumu hatası:', error);
+      logError('Kasa durumu hatası:', error);
       res.status(500).json({ error: 'Kasa durumu alınamadı' });
     }
   }
@@ -208,7 +224,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa sayımı hatası:', error);
+      logError('Kasa sayımı hatası:', error);
       res.status(500).json({ error: 'Kasa sayımı yapılamadı' });
     }
   }
@@ -274,7 +290,7 @@ export class CashController {
       res.json(report);
 
     } catch (error) {
-      console.error('Kasa raporu hatası:', error);
+      logError('Kasa raporu hatası:', error);
       res.status(500).json({ error: 'Kasa raporu oluşturulamadı' });
     }
   }
@@ -334,7 +350,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa işlemi ekleme hatası:', error);
+      logError('Kasa işlemi ekleme hatası:', error);
       res.status(500).json({ error: 'Kasa işlemi eklenemedi' });
     }
   }
@@ -344,7 +360,22 @@ export class CashController {
     try {
       const userId = (req as any).user.id;
       const { page = 1, limit = 20, startDate, endDate } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = {
         userId,
@@ -365,7 +396,7 @@ export class CashController {
         },
         orderBy: { date: 'desc' },
         skip,
-        take: Number(limit)
+        take: limitNum
       });
 
       const total = await prisma.transaction.count({ where });
@@ -373,15 +404,15 @@ export class CashController {
       res.json({
         transactions,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limitNum)
         }
       });
 
     } catch (error) {
-      console.error('Kasa işlemleri listesi hatası:', error);
+      logError('Kasa işlemleri listesi hatası:', error);
       res.status(500).json({ error: 'Kasa işlemleri alınamadı' });
     }
   }

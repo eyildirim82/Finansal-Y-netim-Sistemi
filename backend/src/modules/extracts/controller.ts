@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
@@ -473,7 +474,7 @@ export class ExtractController {
       });
       return;
     } catch (error) {
-      console.error('Excel yükleme hatası:', error);
+      logError('Excel yükleme hatası:', error);
       res.status(500).json({ error: 'Dosya işleme hatası' });
       return;
     }
@@ -517,7 +518,7 @@ export class ExtractController {
             state = 'SEEK_TX_HEADER';
             continue;
           } catch (error) {
-            console.error(`Müşteri header işleme hatası (Satır ${i}):`, error);
+            logError(`Müşteri header işleme hatası (Satır ${i}):`, error);
             errorRows++;
             i++;
             continue;
@@ -556,7 +557,7 @@ export class ExtractController {
         }
 
         if (!currentCustomer) {
-          console.error('Müşteri context kayboldu');
+          logError('Müşteri context kayboldu');
           errorRows++;
           i++;
           continue;
@@ -596,7 +597,7 @@ export class ExtractController {
           processedRows++;
           console.log(`[DEBUG] Batch'e eklendi. Toplam batch: ${batch.length}`);
         } catch (error) {
-          console.error(`Satır ${i + 1} işleme hatası:`, error);
+          logError(`Satır ${i + 1} işleme hatası:`, error);
           errorRows++;
         }
         i++;
@@ -609,7 +610,7 @@ export class ExtractController {
         await prisma.extractTransaction.createMany({ data: batch });
         console.log(`[DEBUG] Batch insert tamamlandı. Toplam: ${batch.length}`);
       } catch (err) {
-        console.error('Batch insert hatası:', err);
+        logError('Batch insert hatası:', err);
         errorRows += batch.length;
       }
     }
@@ -668,7 +669,7 @@ export class ExtractController {
 
       res.json(extracts);
     } catch (error) {
-      console.error('Ekstre listesi hatası:', error);
+      logError('Ekstre listesi hatası:', error);
       res.status(500).json({ error: 'Ekstre listesi alınamadı' });
     }
   }
@@ -692,7 +693,7 @@ export class ExtractController {
       }
       return res.json(extract);
     } catch (error) {
-      console.error('Ekstre detay hatası:', error);
+      logError('Ekstre detay hatası:', error);
       return res.status(500).json({ error: 'Ekstre detayı alınamadı' });
     }
   }
@@ -722,7 +723,7 @@ export class ExtractController {
         }
       });
     } catch (error) {
-      console.error('Bakiye doğrulama hatası:', error);
+      logError('Bakiye doğrulama hatası:', error);
       return res.status(500).json({ error: 'Bakiye doğrulama yapılamadı' });
     }
   }

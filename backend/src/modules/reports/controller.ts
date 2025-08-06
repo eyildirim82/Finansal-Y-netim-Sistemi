@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -119,7 +120,7 @@ export class ReportController {
         }
       });
     } catch (error) {
-      console.error('Dashboard özeti getirilirken hata:', error);
+      logError('Dashboard özeti getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Dashboard özeti getirilirken bir hata oluştu'
@@ -138,10 +139,18 @@ export class ReportController {
         where.userId = userId;
       }
 
-      if (year) {
+      let yearNum: number | undefined;
+      if (year !== undefined) {
+        yearNum = Number(year);
+        if (!Number.isInteger(yearNum) || yearNum <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Yıl pozitif tamsayı olmalıdır'
+          });
+        }
         where.date = {
-          gte: new Date(parseInt(year as string), 0, 1),
-          lte: new Date(parseInt(year as string), 11, 31)
+          gte: new Date(yearNum, 0, 1),
+          lte: new Date(yearNum, 11, 31)
         };
       }
 
@@ -154,7 +163,7 @@ export class ReportController {
           COUNT(*) as count
         FROM "Transaction"
         WHERE ${where.userId ? `"userId" = ${userId}` : '1=1'}
-        ${year ? `AND EXTRACT(YEAR FROM date) = ${parseInt(year as string)}` : ''}
+        ${yearNum ? `AND EXTRACT(YEAR FROM date) = ${yearNum}` : ''}
         GROUP BY EXTRACT(MONTH FROM date), type
         ORDER BY month, type
       `;
@@ -184,7 +193,7 @@ export class ReportController {
         data: monthlyTrend
       });
     } catch (error) {
-      console.error('Aylık trend getirilirken hata:', error);
+      logError('Aylık trend getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Aylık trend getirilirken bir hata oluştu'
@@ -262,7 +271,7 @@ export class ReportController {
         data: categoryReport
       });
     } catch (error) {
-      console.error('Kategori raporu getirilirken hata:', error);
+      logError('Kategori raporu getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori raporu getirilirken bir hata oluştu'
@@ -275,6 +284,14 @@ export class ReportController {
     try {
       const { startDate, endDate, type, limit = 10 } = req.query;
       const userId = (req as any).user.id;
+      const limitNum = Number(limit);
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
 
       const where: any = {};
       if ((req as any).user.role !== 'ADMIN') {
@@ -342,14 +359,14 @@ export class ReportController {
       // Net tutara göre sırala ve limit uygula
       const sortedReport = customerReport
         .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
-        .slice(0, parseInt(limit as string));
+        .slice(0, limitNum);
 
       res.json({
         success: true,
         data: sortedReport
       });
     } catch (error) {
-      console.error('Müşteri raporu getirilirken hata:', error);
+      logError('Müşteri raporu getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Müşteri raporu getirilirken bir hata oluştu'
@@ -427,7 +444,7 @@ export class ReportController {
         data: dailyTrend
       });
     } catch (error) {
-      console.error('Günlük trend getirilirken hata:', error);
+      logError('Günlük trend getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Günlük trend getirilirken bir hata oluştu'
@@ -518,7 +535,7 @@ export class ReportController {
         }
       });
     } catch (error) {
-      console.error('Nakit akışı raporu getirilirken hata:', error);
+      logError('Nakit akışı raporu getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Nakit akışı raporu getirilirken bir hata oluştu'
@@ -560,7 +577,7 @@ export class ReportController {
       });
 
     } catch (error) {
-      console.error('Birleşik dashboard hatası:', error);
+      logError('Birleşik dashboard hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Birleşik dashboard getirilirken bir hata oluştu'
@@ -736,7 +753,7 @@ export class ReportController {
       });
 
     } catch (error) {
-      console.error('Tahsilat raporu hatası:', error);
+      logError('Tahsilat raporu hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Tahsilat raporu getirilirken bir hata oluştu'
@@ -824,7 +841,7 @@ export class ReportController {
       });
 
     } catch (error) {
-      console.error('Yaşlandırma analizi hatası:', error);
+      logError('Yaşlandırma analizi hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Yaşlandırma analizi getirilirken bir hata oluştu'

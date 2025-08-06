@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import * as XLSX from 'xlsx';
@@ -147,7 +148,7 @@ export class ImportController {
       });
 
     } catch (error) {
-      console.error('Excel import hatası:', error);
+      logError('Excel import hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Excel dosyası işlenirken bir hata oluştu'
@@ -263,7 +264,7 @@ export class ImportController {
             });
 
           } catch (error) {
-            console.error('CSV import hatası:', error);
+            logError('CSV import hatası:', error);
             res.status(500).json({
               success: false,
               message: 'CSV dosyası işlenirken bir hata oluştu'
@@ -271,7 +272,7 @@ export class ImportController {
           }
         })
         .on('error', (error) => {
-          console.error('CSV okuma hatası:', error);
+          logError('CSV okuma hatası:', error);
           res.status(500).json({
             success: false,
             message: 'CSV dosyası okunurken bir hata oluştu'
@@ -279,7 +280,7 @@ export class ImportController {
         });
 
     } catch (error) {
-      console.error('CSV import hatası:', error);
+      logError('CSV import hatası:', error);
       res.status(500).json({
         success: false,
         message: 'CSV dosyası işlenirken bir hata oluştu'
@@ -439,7 +440,7 @@ export class ImportController {
       });
 
     } catch (error) {
-      console.error('Müşteri import hatası:', error);
+      logError('Müşteri import hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Müşteri dosyası işlenirken bir hata oluştu'
@@ -679,7 +680,7 @@ export class ImportController {
       res.send(buffer);
 
     } catch (error) {
-      console.error('Şablon indirme hatası:', error);
+      logError('Şablon indirme hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Şablon indirilirken bir hata oluştu'

@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
@@ -58,7 +59,7 @@ export const authMiddleware = async (
     next();
 
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logError('Auth middleware error:', error);
     
     if (error instanceof jwt.JsonWebTokenError) {
       return res.status(401).json({

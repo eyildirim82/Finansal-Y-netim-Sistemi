@@ -2,6 +2,10 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { validationResult } from 'express-validator';
 
+// Allowed fields for sorting customers
+export type CustomerSortField = 'name' | 'phone' | 'address' | 'type';
+const ALLOWED_SORT_FIELDS: CustomerSortField[] = ['name', 'phone', 'address', 'type'];
+
 const prisma = new PrismaClient();
 
 export class CustomerController {
@@ -16,6 +20,14 @@ export class CustomerController {
         sortBy = 'name',
         sortOrder = 'asc'
       } = req.query;
+
+      const sortField = sortBy as string;
+      if (!ALLOWED_SORT_FIELDS.includes(sortField as CustomerSortField)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ge\u00e7erli bir s\u0131ralama alan\u0131 giriniz'
+        });
+      }
 
       const userId = (req as any).user.id;
       const pageNum = parseInt(page as string);
@@ -40,8 +52,8 @@ export class CustomerController {
       }
 
       // Sıralama
-      const orderBy: any = {};
-      orderBy[sortBy as string] = sortOrder;
+      const orderBy: { [key in CustomerSortField]?: 'asc' | 'desc' } = {};
+      orderBy[sortField as CustomerSortField] = sortOrder as 'asc' | 'desc';
 
       // Toplam kayıt sayısı
       const total = await prisma.customer.count({ where });

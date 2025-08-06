@@ -1,9 +1,16 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+
+import { PrismaClient, Prisma } from '@prisma/client';
 import { validationResult } from 'express-validator';
 import { t } from '../../utils/i18n';
 
+
+
 const prisma = new PrismaClient();
+
+type CustomerWithTransactionsCount = Prisma.CustomerGetPayload<{
+  include: { _count: { select: { transactions: true } } };
+}>;
 
 export class CustomerController {
   // Tüm müşterileri getir (filtreleme ve sayfalama ile)
@@ -19,17 +26,30 @@ export class CustomerController {
       } = req.query;
 
       const userId = (req as any).user.id;
-      const pageNum = parseInt(page as string);
-      const limitNum = parseInt(limit as string);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
       const skip = (pageNum - 1) * limitNum;
 
       // Filtreleme koşulları
-      const where: any = {
+      const where: Prisma.CustomerWhereInput = {
         userId: userId // Kullanıcıya özel müşteriler
       };
 
       if (type) {
-        where.type = type;
+        where.type = type as string;
       }
 
       if (search) {
@@ -41,14 +61,26 @@ export class CustomerController {
       }
 
       // Sıralama
-      const orderBy: any = {};
-      orderBy[sortBy as string] = sortOrder;
+      const orderBy: Prisma.CustomerOrderByWithRelationInput = (() => {
+        const order = sortOrder as Prisma.SortOrder;
+        switch (sortBy as string) {
+          case 'phone':
+            return { phone: order };
+          case 'createdAt':
+            return { createdAt: order };
+          case 'updatedAt':
+            return { updatedAt: order };
+          case 'name':
+          default:
+            return { name: order };
+        }
+      })();
 
       // Toplam kayıt sayısı
       const total = await prisma.customer.count({ where });
 
       // Müşterileri getir
-      const customers = await prisma.customer.findMany({
+      const customers = (await prisma.customer.findMany({
         where,
         include: {
           _count: {
@@ -70,7 +102,7 @@ export class CustomerController {
         orderBy,
         skip,
         take: limitNum
-      });
+      })) as CustomerWithTransactionsCount[];
 
       return res.json({
         success: true,
@@ -98,8 +130,8 @@ export class CustomerController {
       const customerId = id;
       const userId = (req as any).user.id;
 
-      const customer = await prisma.customer.findFirst({
-        where: { 
+      const customer = (await prisma.customer.findFirst({
+        where: {
           id: customerId,
           userId: userId // Kullanıcıya özel müşteri
         },
@@ -127,7 +159,7 @@ export class CustomerController {
             }
           }
         }
-      });
+      })) as CustomerWithTransactionsCount | null;
 
       if (!customer) {
         return res.status(404).json({
@@ -173,9 +205,14 @@ export class CustomerController {
 
       const userId = (req as any).user.id;
 
+      let code: string;
+      do {
+        code = `CUST_${uuidv4()}`;
+      } while (await prisma.customer.findUnique({ where: { code } }));
+
       const customer = await prisma.customer.create({
         data: {
-          code: `CUST_${Date.now()}`,
+          code,
           name,
           phone,
           address,
@@ -277,8 +314,8 @@ export class CustomerController {
       const userId = (req as any).user.id;
 
       // Müşterinin var olup olmadığını kontrol et
-      const existingCustomer = await prisma.customer.findFirst({
-        where: { 
+      const existingCustomer = (await prisma.customer.findFirst({
+        where: {
           id: customerId,
           userId: userId
         },
@@ -289,7 +326,7 @@ export class CustomerController {
             }
           }
         }
-      });
+      })) as CustomerWithTransactionsCount | null;
 
       if (!existingCustomer) {
         return res.status(404).json({
@@ -299,7 +336,7 @@ export class CustomerController {
       }
 
       // İşlemleri olan müşteriyi silmeye izin verme
-      if (existingCustomer._count.transactions > 0) {
+      if (existingCustomer?._count?.transactions > 0) {
         return res.status(400).json({
           success: false,
           message: t(req, 'CUSTOMER_DELETE_HAS_TRANSACTIONS')
@@ -409,8 +446,15 @@ export class CustomerController {
     try {
       const { q, limit = 10 } = req.query;
       const searchQuery = q as string;
-      const limitNum = parseInt(limit as string);
+      const limitNum = Number(limit);
       const userId = (req as any).user.id;
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
 
       if (!searchQuery || searchQuery.length < 2) {
         return res.json({
@@ -464,8 +508,8 @@ export class CustomerController {
       }
 
       // Müşterilerin var olup olmadığını ve yetki kontrolü
-      const customers = await prisma.customer.findMany({
-        where: { 
+      const customers = (await prisma.customer.findMany({
+        where: {
           id: { in: ids },
           userId: userId
         },
@@ -476,7 +520,7 @@ export class CustomerController {
             }
           }
         }
-      });
+      })) as CustomerWithTransactionsCount[];
 
       if (customers.length !== ids.length) {
         return res.status(404).json({
@@ -485,7 +529,9 @@ export class CustomerController {
         });
       }
 
-      const customersWithTransactions = customers.filter(c => c._count.transactions > 0);
+      const customersWithTransactions = customers.filter(
+        c => (c._count?.transactions ?? 0) > 0
+      );
       if (customersWithTransactions.length > 0) {
         return res.status(400).json({
           success: false,

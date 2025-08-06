@@ -138,10 +138,18 @@ export class ReportController {
         where.userId = userId;
       }
 
-      if (year) {
+      let yearNum: number | undefined;
+      if (year !== undefined) {
+        yearNum = Number(year);
+        if (!Number.isInteger(yearNum) || yearNum <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Yıl pozitif tamsayı olmalıdır'
+          });
+        }
         where.date = {
-          gte: new Date(parseInt(year as string), 0, 1),
-          lte: new Date(parseInt(year as string), 11, 31)
+          gte: new Date(yearNum, 0, 1),
+          lte: new Date(yearNum, 11, 31)
         };
       }
 
@@ -154,7 +162,7 @@ export class ReportController {
           COUNT(*) as count
         FROM "Transaction"
         WHERE ${where.userId ? `"userId" = ${userId}` : '1=1'}
-        ${year ? `AND EXTRACT(YEAR FROM date) = ${parseInt(year as string)}` : ''}
+        ${yearNum ? `AND EXTRACT(YEAR FROM date) = ${yearNum}` : ''}
         GROUP BY EXTRACT(MONTH FROM date), type
         ORDER BY month, type
       `;
@@ -275,6 +283,14 @@ export class ReportController {
     try {
       const { startDate, endDate, type, limit = 10 } = req.query;
       const userId = (req as any).user.id;
+      const limitNum = Number(limit);
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
 
       const where: any = {};
       if ((req as any).user.role !== 'ADMIN') {
@@ -342,7 +358,7 @@ export class ReportController {
       // Net tutara göre sırala ve limit uygula
       const sortedReport = customerReport
         .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
-        .slice(0, parseInt(limit as string));
+        .slice(0, limitNum);
 
       res.json({
         success: true,

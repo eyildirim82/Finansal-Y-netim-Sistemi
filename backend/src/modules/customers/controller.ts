@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -115,7 +116,9 @@ export class CustomerController {
         }
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMERS_FETCH_ERROR_LOG'), error);
+      logError('Müşteriler getirilirken hata:', error);
+
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMERS_FETCH_ERROR')
@@ -173,7 +176,8 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMER_FETCH_ERROR_LOG'), error);
+      logError('Müşteri getirilirken hata:', error);
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMER_FETCH_ERROR')
@@ -230,7 +234,8 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMER_CREATE_ERROR_LOG'), error);
+      logError('Müşteri oluşturulurken hata:', error);
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMER_CREATE_ERROR')
@@ -298,7 +303,8 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMER_UPDATE_ERROR_LOG'), error);
+      logError('Müşteri güncellenirken hata:', error);
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMER_UPDATE_ERROR')
@@ -352,7 +358,8 @@ export class CustomerController {
         message: t(req, 'CUSTOMER_DELETE_SUCCESS')
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMER_DELETE_ERROR_LOG'), error);
+      logError('Müşteri silinirken hata:', error);
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMER_DELETE_ERROR')
@@ -433,7 +440,8 @@ export class CustomerController {
         }
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMER_STATS_ERROR_LOG'), error);
+      logError('Müşteri istatistikleri getirilirken hata:', error);
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMER_STATS_ERROR')
@@ -486,7 +494,8 @@ export class CustomerController {
         data: customers
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMER_SEARCH_ERROR_LOG'), error);
+      logError('Müşteri arama hatası:', error);
+
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMER_SEARCH_ERROR')
@@ -551,7 +560,7 @@ export class CustomerController {
         message: t(req, 'CUSTOMERS_DELETE_SUCCESS', { count: ids.length })
       });
     } catch (error) {
-      console.error(t(req, 'CUSTOMERS_DELETE_ERROR_LOG'), error);
+      logError('Toplu müşteri silme hatası:', error);
       return res.status(500).json({
         success: false,
         message: t(req, 'CUSTOMERS_DELETE_ERROR')

@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response, NextFunction } from 'express';
 
 export interface AppError extends Error {
@@ -14,16 +15,12 @@ export const errorHandler = (
   let error = { ...err };
   error.message = err.message;
 
-  // Log error
-  console.error('Error:', {
-    message: err.message,
-    stack: err.stack,
+  // Log sanitized error without sensitive data
+  logError('Error', err, {
     url: req.url,
     method: req.method,
-    body: req.body,
     params: req.params,
-    query: req.query,
-    user: req.user
+    query: req.query
   });
 
   // Prisma validation error

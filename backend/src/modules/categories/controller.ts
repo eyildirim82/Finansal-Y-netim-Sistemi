@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { validationResult } from 'express-validator';
@@ -41,7 +42,7 @@ export class CategoryController {
 
       res.json(categories);
     } catch (error) {
-      console.error('Kategoriler getirilirken hata:', error);
+      logError('Kategoriler getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategoriler getirilirken bir hata oluştu'
@@ -89,7 +90,7 @@ export class CategoryController {
         data: category
       });
     } catch (error) {
-      console.error('Kategori getirilirken hata:', error);
+      logError('Kategori getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori getirilirken bir hata oluştu'
@@ -149,7 +150,7 @@ export class CategoryController {
         data: category
       });
     } catch (error) {
-      console.error('Kategori oluşturulurken hata:', error);
+      logError('Kategori oluşturulurken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori oluşturulurken bir hata oluştu'
@@ -232,7 +233,7 @@ export class CategoryController {
         data: category
       });
     } catch (error) {
-      console.error('Kategori güncellenirken hata:', error);
+      logError('Kategori güncellenirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori güncellenirken bir hata oluştu'
@@ -291,7 +292,7 @@ export class CategoryController {
         message: 'Kategori başarıyla silindi'
       });
     } catch (error) {
-      console.error('Kategori silinirken hata:', error);
+      logError('Kategori silinirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori silinirken bir hata oluştu'
@@ -359,7 +360,7 @@ export class CategoryController {
         }
       });
     } catch (error) {
-      console.error('Kategori istatistikleri getirilirken hata:', error);
+      logError('Kategori istatistikleri getirilirken hata:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori istatistikleri getirilirken bir hata oluştu'
@@ -421,7 +422,7 @@ export class CategoryController {
         data: categories
       });
     } catch (error) {
-      console.error('Kategori arama hatası:', error);
+      logError('Kategori arama hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Kategori arama sırasında bir hata oluştu'

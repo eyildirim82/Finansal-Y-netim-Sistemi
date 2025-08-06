@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -97,7 +98,7 @@ export const login = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    logError('Login error:', error);
     res.status(500).json({
       success: false,
       error: 'Giriş yapılırken hata oluştu'
@@ -170,7 +171,7 @@ export const register = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Register error:', error);
+    logError('Register error:', error);
     res.status(500).json({
       success: false,
       error: 'Kayıt olurken hata oluştu'
@@ -206,7 +207,7 @@ export const getProfile = async (req: Request, res: Response) => {
     res.json(user);
 
   } catch (error) {
-    console.error('Get profile error:', error);
+    logError('Get profile error:', error);
     res.status(500).json({
       success: false,
       error: 'Profil bilgileri alınırken hata oluştu'
@@ -271,7 +272,7 @@ export const changePassword = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Change password error:', error);
+    logError('Change password error:', error);
     res.status(500).json({
       success: false,
       error: 'Şifre değiştirilirken hata oluştu'

@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -49,7 +50,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa akışı oluşturma hatası:', error);
+      logError('Kasa akışı oluşturma hatası:', error);
       res.status(500).json({ error: 'Kasa akışı oluşturulamadı' });
     }
   }
@@ -105,7 +106,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa akışları listesi hatası:', error);
+      logError('Kasa akışları listesi hatası:', error);
       res.status(500).json({ error: 'Kasa akışları alınamadı' });
     }
   }
@@ -162,7 +163,7 @@ export class CashController {
       res.json(currentBalance);
 
     } catch (error) {
-      console.error('Kasa durumu hatası:', error);
+      logError('Kasa durumu hatası:', error);
       res.status(500).json({ error: 'Kasa durumu alınamadı' });
     }
   }
@@ -223,7 +224,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa sayımı hatası:', error);
+      logError('Kasa sayımı hatası:', error);
       res.status(500).json({ error: 'Kasa sayımı yapılamadı' });
     }
   }
@@ -289,7 +290,7 @@ export class CashController {
       res.json(report);
 
     } catch (error) {
-      console.error('Kasa raporu hatası:', error);
+      logError('Kasa raporu hatası:', error);
       res.status(500).json({ error: 'Kasa raporu oluşturulamadı' });
     }
   }
@@ -349,7 +350,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa işlemi ekleme hatası:', error);
+      logError('Kasa işlemi ekleme hatası:', error);
       res.status(500).json({ error: 'Kasa işlemi eklenemedi' });
     }
   }
@@ -411,7 +412,7 @@ export class CashController {
       });
 
     } catch (error) {
-      console.error('Kasa işlemleri listesi hatası:', error);
+      logError('Kasa işlemleri listesi hatası:', error);
       res.status(500).json({ error: 'Kasa işlemleri alınamadı' });
     }
   }

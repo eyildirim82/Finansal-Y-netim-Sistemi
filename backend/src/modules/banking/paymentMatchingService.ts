@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { PrismaClient } from '@prisma/client';
 
 /**
@@ -160,7 +161,7 @@ export class PaymentMatchingService {
       return { match: false, confidence: 0, method: 'no_amount_pattern' };
 
     } catch (error) {
-      console.error('Tutar deseni kontrolü hatası:', error);
+      logError('Tutar deseni kontrolü hatası:', error);
       return { match: false, confidence: 0, method: 'error' };
     }
   }
@@ -216,7 +217,7 @@ export class PaymentMatchingService {
       }));
 
     } catch (error) {
-      console.error('Müşteri getirme hatası:', error);
+      logError('Müşteri getirme hatası:', error);
       return [];
     }
   }
@@ -335,7 +336,7 @@ export class PaymentMatchingService {
       };
       
     } catch (error) {
-      console.error('❌ Eşleştirme hatası:', error);
+      logError('❌ Eşleştirme hatası:', error);
       return {
         matched: false,
         confidence: 0,
@@ -401,7 +402,7 @@ export class PaymentMatchingService {
       return true;
 
     } catch (error) {
-      console.error('❌ Eşleştirme kaydetme hatası:', error);
+      logError('❌ Eşleştirme kaydetme hatası:', error);
       return false;
     }
   }
@@ -431,7 +432,7 @@ export class PaymentMatchingService {
       return transactions;
 
     } catch (error) {
-      console.error('❌ Eşleşmeyen işlemler getirme hatası:', error);
+      logError('❌ Eşleşmeyen işlemler getirme hatası:', error);
       return [];
     }
   }
@@ -464,7 +465,7 @@ export class PaymentMatchingService {
       return true;
 
     } catch (error) {
-      console.error('❌ Eşleştirme onaylama hatası:', error);
+      logError('❌ Eşleştirme onaylama hatası:', error);
       return false;
     }
   }
@@ -498,7 +499,7 @@ export class PaymentMatchingService {
       };
 
     } catch (error) {
-      console.error('❌ Eşleştirme istatistikleri hatası:', error);
+      logError('❌ Eşleştirme istatistikleri hatası:', error);
       return {
         total: 0,
         matched: 0,

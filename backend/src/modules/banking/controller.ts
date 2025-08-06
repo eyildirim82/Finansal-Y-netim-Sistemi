@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { YapiKrediFASTEmailService } from './emailService';
@@ -59,7 +60,7 @@ export class BankingController {
           });
 
         } catch (error) {
-          console.error('Email işleme hatası:', error);
+          logError('Email işleme hatası:', error);
         }
       }
 
@@ -77,7 +78,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Otomatik email çekme hatası:', error);
+      logError('Otomatik email çekme hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Email çekme sırasında hata oluştu',
@@ -140,7 +141,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Email işleme hatası:', error);
+      logError('Email işleme hatası:', error);
       res.status(500).json({
         success: false,
         message: 'Email işlenirken hata oluştu'
@@ -199,7 +200,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Banka işlemleri getirme hatası:', error);
+      logError('Banka işlemleri getirme hatası:', error);
       res.status(500).json({ error: 'Banka işlemleri getirilemedi' });
     }
   }
@@ -226,7 +227,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Eşleşmeyen ödemeler getirme hatası:', error);
+      logError('Eşleşmeyen ödemeler getirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Eşleşmeyen ödemeler getirilemedi'
@@ -292,7 +293,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Manuel eşleştirme hatası:', error);
+      logError('Manuel eşleştirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Manuel eşleştirme yapılamadı'
@@ -316,7 +317,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Email ayarları getirme hatası:', error);
+      logError('Email ayarları getirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Email ayarları getirilemedi'
@@ -337,7 +338,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Email bağlantı testi hatası:', error);
+      logError('Email bağlantı testi hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Email bağlantı testi yapılamadı'
@@ -356,7 +357,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Eşleştirme istatistikleri hatası:', error);
+      logError('Eşleştirme istatistikleri hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Eşleştirme istatistikleri getirilemedi'
@@ -398,7 +399,7 @@ export class BankingController {
       });
 
     } catch (error) {
-      console.error('Otomatik eşleştirme hatası:', error);
+      logError('Otomatik eşleştirme hatası:', error);
       res.status(500).json({
         success: false,
         error: 'Otomatik eşleştirme çalıştırılamadı'
@@ -420,7 +421,7 @@ export class BankingController {
 
       return await this.emailService.parseYapiKrediFASTEmail(mockEmail);
     } catch (error) {
-      console.error('Email parse hatası:', error);
+      logError('Email parse hatası:', error);
       return null;
     }
   }

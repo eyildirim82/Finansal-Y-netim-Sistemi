@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { decodeWords } from 'libmime';
@@ -73,7 +74,7 @@ export class YapiKrediFASTEmailService {
       console.log('IMAP bağlantısı başarılı.');
       return true;
     } catch (err) {
-      console.error('IMAP bağlantı hatası:', err);
+      logError('IMAP bağlantı hatası:', err);
       throw err;
     }
   }
@@ -96,7 +97,7 @@ export class YapiKrediFASTEmailService {
       await this.imap!.mailboxOpen('INBOX');
       console.log('INBOX mailbox açıldı.');
     } catch (err) {
-      console.error('INBOX mailbox açılamadı:', err);
+      logError('INBOX mailbox açılamadı:', err);
       throw err;
     }
 
@@ -137,7 +138,7 @@ export class YapiKrediFASTEmailService {
               this.metrics.failedEmails++;
             }
           } catch (err) {
-            console.error('Email parse hatası:', err);
+            logError('Email parse hatası:', err);
             this.metrics.failedEmails++;
           }
         }
@@ -145,7 +146,7 @@ export class YapiKrediFASTEmailService {
         lock.release();
       }
     } catch (err) {
-      console.error('Email batch fetch hatası:', err);
+      logError('Email batch fetch hatası:', err);
       throw err;
     }
 
@@ -239,7 +240,7 @@ export class YapiKrediFASTEmailService {
       try {
         fs.appendFileSync(this.failedLogPath, JSON.stringify(failObj) + '\n', 'utf8');
       } catch (err) {
-        console.error('Parse edilemeyen e-posta loglanamadı:', err);
+        logError('Parse edilemeyen e-posta loglanamadı:', err);
       }
       return null;
     }
@@ -361,14 +362,14 @@ export class YapiKrediFASTEmailService {
             lock.release();
           }
         } catch (err) {
-          console.error('Realtime email processing error:', err);
+          logError('Realtime email processing error:', err);
         }
       });
 
       console.log('🔄 Realtime email monitoring başlatıldı');
       
     } catch (err) {
-      console.error('Realtime monitoring başlatılamadı:', err);
+      logError('Realtime monitoring başlatılamadı:', err);
       throw err;
     }
   }

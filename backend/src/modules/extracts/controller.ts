@@ -448,7 +448,7 @@ export class ExtractController {
       });
 
       // Verileri işle
-      const processedData = await this.processExtractData(ws, extract.id);
+      const processedData = await this.processExtractData(ws, extract.id, userId);
       
       // Ekstre durumunu güncelle
       await prisma.extract.update({
@@ -480,7 +480,7 @@ export class ExtractController {
   }
 
   // Ekstre verilerini işleme - Orijinal parser mantığı
-  private async processExtractData(ws: ExcelJS.Worksheet, extractId: string) {
+  private async processExtractData(ws: ExcelJS.Worksheet, extractId: string, userId?: string) {
     let processedRows = 0;
     let errorRows = 0;
     const customers = new Set<string>();
@@ -510,7 +510,7 @@ export class ExtractController {
             console.log(`[DEBUG] Müşteri header:`, header);
             i = nextRow;
             // Müşteriyi bul veya oluştur
-            const customer = await this.findOrCreateCustomer(header);
+            const customer = await this.findOrCreateCustomer(header, userId);
             currentCustomer = customer;
             customers.add(customer.name);
             console.log(`[DEBUG] Müşteri oluşturuldu/bulundu: ${customer.name}`);
@@ -618,11 +618,11 @@ export class ExtractController {
   }
 
   // Müşteriyi bul veya oluştur
-  private async findOrCreateCustomer(header: any): Promise<any> {
+  private async findOrCreateCustomer(header: any, userId?: string): Promise<any> {
     if (!header.name) return null;
 
     let customer = await prisma.customer.findFirst({
-      where: { name: header.name }
+      where: { name: header.name, userId }
     });
 
     if (!customer) {
@@ -635,7 +635,8 @@ export class ExtractController {
           address: header.address,
           accountType: header.accountType,
           tag1: header.tag1,
-          tag2: header.tag2
+          tag2: header.tag2,
+          userId: userId
         }
       });
     }

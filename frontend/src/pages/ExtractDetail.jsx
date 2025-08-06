@@ -14,7 +14,7 @@ const ExtractDetail = () => {
       setLoading(true);
       try {
         const data = await extractService.getExtractDetail(id);
-        setExtract(data.extract);
+        setExtract(data);
         setTransactions(data.transactions || []);
       } catch (e) {
         setError('Detaylar yüklenemedi');

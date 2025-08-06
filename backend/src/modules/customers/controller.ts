@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 export class CustomerController {
   // Tüm müşterileri getir (filtreleme ve sayfalama ile)
-  static async getAllCustomers(req: Request, res: Response) {
+  static async getAllCustomers(req: Request, res: Response): Promise<Response> {
     try {
       const {
         page = 1,
@@ -17,12 +17,15 @@ export class CustomerController {
         sortOrder = 'asc'
       } = req.query;
 
+      const userId = (req as any).user.id;
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
       const skip = (pageNum - 1) * limitNum;
 
       // Filtreleme koşulları
-      const where: any = {};
+      const where: any = {
+        userId: userId // Kullanıcıya özel müşteriler
+      };
 
       if (type) {
         where.type = type;
@@ -30,10 +33,9 @@ export class CustomerController {
 
       if (search) {
         where.OR = [
-          { name: { contains: search as string, mode: 'insensitive' } },
-          { email: { contains: search as string, mode: 'insensitive' } },
-          { phone: { contains: search as string, mode: 'insensitive' } },
-          { address: { contains: search as string, mode: 'insensitive' } }
+          { name: { contains: search as string } },
+          { phone: { contains: search as string } },
+          { address: { contains: search as string } }
         ];
       }
 
@@ -69,7 +71,7 @@ export class CustomerController {
         take: limitNum
       });
 
-      res.json({
+      return res.json({
         success: true,
         customers,
         total,
@@ -81,7 +83,7 @@ export class CustomerController {
       });
     } catch (error) {
       console.error('Müşteriler getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteriler getirilirken bir hata oluştu'
       });
@@ -89,28 +91,30 @@ export class CustomerController {
   }
 
   // Tek müşteri getir
-  static async getCustomer(req: Request, res: Response) {
+  static async getCustomer(req: Request, res: Response): Promise<Response> {
     try {
       const { id } = req.params;
       const customerId = id;
+      const userId = (req as any).user.id;
 
-      const customer = await prisma.customer.findUnique({
-        where: { id: customerId },
+      const customer = await prisma.customer.findFirst({
+        where: { 
+          id: customerId,
+          userId: userId // Kullanıcıya özel müşteri
+        },
         include: {
           transactions: {
             include: {
               category: {
                 select: {
                   id: true,
-                  name: true,
-                  color: true
+                  name: true
                 }
               },
               user: {
                 select: {
                   id: true,
-                  username: true,
-                  email: true
+                  username: true
                 }
               }
             },
@@ -131,13 +135,13 @@ export class CustomerController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: customer
       });
     } catch (error) {
       console.error('Müşteri getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri getirilirken bir hata oluştu'
       });
@@ -145,7 +149,7 @@ export class CustomerController {
   }
 
   // Yeni müşteri oluştur
-  static async createCustomer(req: Request, res: Response) {
+  static async createCustomer(req: Request, res: Response): Promise<Response> {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -158,51 +162,38 @@ export class CustomerController {
 
       const {
         name,
-        email,
         phone,
         address,
-        type,
-        taxNumber,
-        notes
+        type = 'INDIVIDUAL',
+        accountType,
+        tag1,
+        tag2
       } = req.body;
 
       const userId = (req as any).user.id;
 
-      // Email benzersizlik kontrolü
-      if (email) {
-        const existingCustomer = await prisma.customer.findFirst({
-          where: { email }
-        });
-
-        if (existingCustomer) {
-          return res.status(400).json({
-            success: false,
-            message: 'Bu email adresi zaten kullanılıyor'
-          });
-        }
-      }
-
       const customer = await prisma.customer.create({
         data: {
+          code: `CUST_${Date.now()}`,
           name,
-          email,
           phone,
           address,
           type,
-          taxNumber,
-          notes,
-          userId
+          accountType,
+          tag1,
+          tag2,
+          userId: userId
         }
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         message: 'Müşteri başarıyla oluşturuldu',
         data: customer
       });
     } catch (error) {
       console.error('Müşteri oluşturulurken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri oluşturulurken bir hata oluştu'
       });
@@ -210,7 +201,7 @@ export class CustomerController {
   }
 
   // Müşteri güncelle
-  static async updateCustomer(req: Request, res: Response) {
+  static async updateCustomer(req: Request, res: Response): Promise<Response> {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -222,22 +213,25 @@ export class CustomerController {
       }
 
       const { id } = req.params;
-      const customerId = parseInt(id);
+      const customerId = id;
       const userId = (req as any).user.id;
 
       const {
         name,
-        email,
         phone,
         address,
         type,
-        taxNumber,
-        notes
+        accountType,
+        tag1,
+        tag2
       } = req.body;
 
       // Müşterinin var olup olmadığını kontrol et
-      const existingCustomer = await prisma.customer.findUnique({
-        where: { id: customerId }
+      const existingCustomer = await prisma.customer.findFirst({
+        where: { 
+          id: customerId,
+          userId: userId
+        }
       });
 
       if (!existingCustomer) {
@@ -247,52 +241,27 @@ export class CustomerController {
         });
       }
 
-      // Sadece kendi müşterilerini güncelleyebilir (admin hariç)
-      if (existingCustomer.userId !== userId && (req as any).user.role !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Bu müşteriyi güncelleme yetkiniz yok'
-        });
-      }
-
-      // Email benzersizlik kontrolü (kendi email'i hariç)
-      if (email && email !== existingCustomer.email) {
-        const duplicateCustomer = await prisma.customer.findFirst({
-          where: { 
-            email,
-            id: { not: customerId }
-          }
-        });
-
-        if (duplicateCustomer) {
-          return res.status(400).json({
-            success: false,
-            message: 'Bu email adresi zaten kullanılıyor'
-          });
-        }
-      }
-
       const customer = await prisma.customer.update({
         where: { id: customerId },
         data: {
           name,
-          email,
           phone,
           address,
           type,
-          taxNumber,
-          notes
+          accountType,
+          tag1,
+          tag2
         }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Müşteri başarıyla güncellendi',
         data: customer
       });
     } catch (error) {
       console.error('Müşteri güncellenirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri güncellenirken bir hata oluştu'
       });
@@ -300,15 +269,18 @@ export class CustomerController {
   }
 
   // Müşteri sil
-  static async deleteCustomer(req: Request, res: Response) {
+  static async deleteCustomer(req: Request, res: Response): Promise<Response> {
     try {
       const { id } = req.params;
-      const customerId = parseInt(id);
+      const customerId = id;
       const userId = (req as any).user.id;
 
       // Müşterinin var olup olmadığını kontrol et
-      const existingCustomer = await prisma.customer.findUnique({
-        where: { id: customerId },
+      const existingCustomer = await prisma.customer.findFirst({
+        where: { 
+          id: customerId,
+          userId: userId
+        },
         include: {
           _count: {
             select: {
@@ -325,14 +297,6 @@ export class CustomerController {
         });
       }
 
-      // Sadece kendi müşterilerini silebilir (admin hariç)
-      if (existingCustomer.userId !== userId && (req as any).user.role !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Bu müşteriyi silme yetkiniz yok'
-        });
-      }
-
       // İşlemleri olan müşteriyi silmeye izin verme
       if (existingCustomer._count.transactions > 0) {
         return res.status(400).json({
@@ -345,13 +309,13 @@ export class CustomerController {
         where: { id: customerId }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Müşteri başarıyla silindi'
       });
     } catch (error) {
       console.error('Müşteri silinirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri silinirken bir hata oluştu'
       });
@@ -359,14 +323,18 @@ export class CustomerController {
   }
 
   // Müşteri istatistikleri
-  static async getCustomerStats(req: Request, res: Response) {
+  static async getCustomerStats(req: Request, res: Response): Promise<Response> {
     try {
       const { customerId } = req.params;
-      const customerIdNum = parseInt(customerId);
+      const customerIdStr = customerId;
+      const userId = (req as any).user.id;
 
       // Müşterinin var olup olmadığını kontrol et
-      const customer = await prisma.customer.findUnique({
-        where: { id: customerIdNum }
+      const customer = await prisma.customer.findFirst({
+        where: { 
+          id: customerIdStr,
+          userId: userId
+        }
       });
 
       if (!customer) {
@@ -379,7 +347,7 @@ export class CustomerController {
       // Müşteri işlem istatistikleri
       const incomeStats = await prisma.transaction.aggregate({
         where: { 
-          customerId: customerIdNum,
+          customerId: customerIdStr,
           type: 'INCOME'
         },
         _sum: { amount: true },
@@ -388,7 +356,7 @@ export class CustomerController {
 
       const expenseStats = await prisma.transaction.aggregate({
         where: { 
-          customerId: customerIdNum,
+          customerId: customerIdStr,
           type: 'EXPENSE'
         },
         _sum: { amount: true },
@@ -398,7 +366,7 @@ export class CustomerController {
       // Aylık trend
       const monthlyStats = await prisma.transaction.groupBy({
         by: ['type'],
-        where: { customerId: customerIdNum },
+        where: { customerId: customerIdStr },
         _sum: { amount: true },
         _count: true
       });
@@ -406,19 +374,19 @@ export class CustomerController {
       // Kategori bazında istatistikler
       const categoryStats = await prisma.transaction.groupBy({
         by: ['categoryId', 'type'],
-        where: { customerId: customerIdNum },
+        where: { customerId: customerIdStr },
         _sum: { amount: true },
         _count: true
       });
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           customer,
           summary: {
-            totalIncome: incomeStats._sum.amount || 0,
-            totalExpense: expenseStats._sum.amount || 0,
-            netAmount: (incomeStats._sum.amount || 0) - (expenseStats._sum.amount || 0),
+            totalIncome: incomeStats._sum?.amount || 0,
+            totalExpense: expenseStats._sum?.amount || 0,
+            netAmount: (incomeStats._sum?.amount || 0) - (expenseStats._sum?.amount || 0),
             incomeCount: incomeStats._count,
             expenseCount: expenseStats._count
           },
@@ -428,7 +396,7 @@ export class CustomerController {
       });
     } catch (error) {
       console.error('Müşteri istatistikleri getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri istatistikleri getirilirken bir hata oluştu'
       });
@@ -436,11 +404,12 @@ export class CustomerController {
   }
 
   // Müşteri arama (autocomplete için)
-  static async searchCustomers(req: Request, res: Response) {
+  static async searchCustomers(req: Request, res: Response): Promise<Response> {
     try {
       const { q, limit = 10 } = req.query;
       const searchQuery = q as string;
       const limitNum = parseInt(limit as string);
+      const userId = (req as any).user.id;
 
       if (!searchQuery || searchQuery.length < 2) {
         return res.json({
@@ -451,16 +420,15 @@ export class CustomerController {
 
       const customers = await prisma.customer.findMany({
         where: {
+          userId: userId,
           OR: [
-            { name: { contains: searchQuery, mode: 'insensitive' } },
-            { email: { contains: searchQuery, mode: 'insensitive' } },
-            { phone: { contains: searchQuery, mode: 'insensitive' } }
+            { name: { contains: searchQuery } },
+            { phone: { contains: searchQuery } }
           ]
         },
         select: {
           id: true,
           name: true,
-          email: true,
           phone: true,
           type: true
         },
@@ -468,13 +436,13 @@ export class CustomerController {
         orderBy: { name: 'asc' }
       });
 
-      res.json({
+      return res.json({
         success: true,
         data: customers
       });
     } catch (error) {
       console.error('Müşteri arama hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri arama sırasında bir hata oluştu'
       });
@@ -482,7 +450,7 @@ export class CustomerController {
   }
 
   // Toplu müşteri silme
-  static async deleteMultipleCustomers(req: Request, res: Response) {
+  static async deleteMultipleCustomers(req: Request, res: Response): Promise<Response> {
     try {
       const { ids } = req.body;
       const userId = (req as any).user.id;
@@ -496,7 +464,10 @@ export class CustomerController {
 
       // Müşterilerin var olup olmadığını ve yetki kontrolü
       const customers = await prisma.customer.findMany({
-        where: { id: { in: ids } },
+        where: { 
+          id: { in: ids },
+          userId: userId
+        },
         include: {
           _count: {
             select: {
@@ -513,18 +484,6 @@ export class CustomerController {
         });
       }
 
-      // Yetki kontrolü ve işlem kontrolü
-      const unauthorizedCustomers = customers.filter(c => 
-        c.userId !== userId && (req as any).user.role !== 'ADMIN'
-      );
-
-      if (unauthorizedCustomers.length > 0) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bazı müşterileri silme yetkiniz yok'
-        });
-      }
-
       const customersWithTransactions = customers.filter(c => c._count.transactions > 0);
       if (customersWithTransactions.length > 0) {
         return res.status(400).json({
@@ -534,16 +493,19 @@ export class CustomerController {
       }
 
       await prisma.customer.deleteMany({
-        where: { id: { in: ids } }
+        where: { 
+          id: { in: ids },
+          userId: userId
+        }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: `${ids.length} müşteri başarıyla silindi`
       });
     } catch (error) {
       console.error('Toplu müşteri silme hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteriler silinirken bir hata oluştu'
       });

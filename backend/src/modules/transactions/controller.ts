@@ -21,8 +21,21 @@ export class TransactionController {
         search
       } = req.query;
 
-      const pageNum = parseInt(page as string);
-      const limitNum = parseInt(limit as string);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
       const skip = (pageNum - 1) * limitNum;
 
       // Filtreleme koşulları

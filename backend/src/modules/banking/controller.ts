@@ -152,7 +152,22 @@ export class BankingController {
   async getBankTransactions(req: Request, res: Response) {
     try {
       const { page = 1, limit = 20, direction, isMatched } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = {};
       if (direction) where.direction = direction;
@@ -168,7 +183,7 @@ export class BankingController {
         },
         orderBy: { transactionDate: 'desc' },
         skip,
-        take: Number(limit)
+        take: limitNum
       });
 
       const total = await prisma.bankTransaction.count({ where });
@@ -176,10 +191,10 @@ export class BankingController {
       res.json({
         transactions,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limitNum)
         }
       });
 
@@ -193,8 +208,16 @@ export class BankingController {
   async getUnmatchedPayments(req: Request, res: Response) {
     try {
       const { limit = 50 } = req.query;
-      
-      const transactions = await this.matchingService.getUnmatchedTransactions(Number(limit));
+      const limitNum = Number(limit);
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const transactions = await this.matchingService.getUnmatchedTransactions(limitNum);
 
       res.json({
         success: true,
@@ -345,8 +368,16 @@ export class BankingController {
   async runAutoMatching(req: Request, res: Response) {
     try {
       const { limit = 100 } = req.query;
-      
-      const unmatchedTransactions = await this.matchingService.getUnmatchedTransactions(Number(limit));
+      const limitNum = Number(limit);
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const unmatchedTransactions = await this.matchingService.getUnmatchedTransactions(limitNum);
       let matchedCount = 0;
 
       for (const transaction of unmatchedTransactions) {

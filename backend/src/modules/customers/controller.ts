@@ -1,3 +1,4 @@
+import { logError } from '@/shared/logger';
 import { Request, Response } from 'express';
 
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -100,7 +101,7 @@ export class CustomerController {
         }
       });
     } catch (error) {
-      console.error('Müşteriler getirilirken hata:', error);
+      logError('Müşteriler getirilirken hata:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteriler getirilirken bir hata oluştu'
@@ -158,7 +159,7 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error('Müşteri getirilirken hata:', error);
+      logError('Müşteri getirilirken hata:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteri getirilirken bir hata oluştu'
@@ -215,7 +216,7 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error('Müşteri oluşturulurken hata:', error);
+      logError('Müşteri oluşturulurken hata:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteri oluşturulurken bir hata oluştu'
@@ -283,7 +284,7 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error('Müşteri güncellenirken hata:', error);
+      logError('Müşteri güncellenirken hata:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteri güncellenirken bir hata oluştu'
@@ -337,7 +338,7 @@ export class CustomerController {
         message: 'Müşteri başarıyla silindi'
       });
     } catch (error) {
-      console.error('Müşteri silinirken hata:', error);
+      logError('Müşteri silinirken hata:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteri silinirken bir hata oluştu'
@@ -418,7 +419,7 @@ export class CustomerController {
         }
       });
     } catch (error) {
-      console.error('Müşteri istatistikleri getirilirken hata:', error);
+      logError('Müşteri istatistikleri getirilirken hata:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteri istatistikleri getirilirken bir hata oluştu'
@@ -464,7 +465,7 @@ export class CustomerController {
         data: customers
       });
     } catch (error) {
-      console.error('Müşteri arama hatası:', error);
+      logError('Müşteri arama hatası:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteri arama sırasında bir hata oluştu'
@@ -529,7 +530,7 @@ export class CustomerController {
         message: `${ids.length} müşteri başarıyla silindi`
       });
     } catch (error) {
-      console.error('Toplu müşteri silme hatası:', error);
+      logError('Toplu müşteri silme hatası:', error);
       return res.status(500).json({
         success: false,
         message: 'Müşteriler silinirken bir hata oluştu'

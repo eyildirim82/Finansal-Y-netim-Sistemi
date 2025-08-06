@@ -8,6 +8,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 
 
+// Allowed fields for sorting customers
+export type CustomerSortField = 'name' | 'phone' | 'address' | 'type';
+const ALLOWED_SORT_FIELDS: CustomerSortField[] = ['name', 'phone', 'address', 'type'];
+
 const prisma = new PrismaClient();
 
 type CustomerWithTransactionsCount = Prisma.CustomerGetPayload<{
@@ -26,6 +30,14 @@ export class CustomerController {
         sortBy = 'name',
         sortOrder = 'asc'
       } = req.query;
+
+      const sortField = sortBy as string;
+      if (!ALLOWED_SORT_FIELDS.includes(sortField as CustomerSortField)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ge\u00e7erli bir s\u0131ralama alan\u0131 giriniz'
+        });
+      }
 
       const userId = (req as any).user.id;
       const pageNum = Number(page);
@@ -63,20 +75,9 @@ export class CustomerController {
       }
 
       // Sıralama
-      const orderBy: Prisma.CustomerOrderByWithRelationInput = (() => {
-        const order = sortOrder as Prisma.SortOrder;
-        switch (sortBy as string) {
-          case 'phone':
-            return { phone: order };
-          case 'createdAt':
-            return { createdAt: order };
-          case 'updatedAt':
-            return { updatedAt: order };
-          case 'name':
-          default:
-            return { name: order };
-        }
-      })();
+      const orderBy: { [key in CustomerSortField]?: 'asc' | 'desc' } = {};
+      orderBy[sortField as CustomerSortField] = sortOrder as 'asc' | 'desc';
+
 
       // Toplam kayıt sayısı
       const total = await prisma.customer.count({ where });

@@ -1,8 +1,13 @@
 import { Request, Response } from 'express';
-import { Prisma, PrismaClient } from '@prisma/client';
+
+import { PrismaClient, Prisma } from '@prisma/client';
 import { validationResult } from 'express-validator';
 
 const prisma = new PrismaClient();
+
+type CustomerWithTransactionsCount = Prisma.CustomerGetPayload<{
+  include: { _count: { select: { transactions: true } } };
+}>;
 
 export class CustomerController {
   // Tüm müşterileri getir (filtreleme ve sayfalama ile)
@@ -59,7 +64,7 @@ export class CustomerController {
       const total = await prisma.customer.count({ where });
 
       // Müşterileri getir
-      const customers = await prisma.customer.findMany({
+      const customers = (await prisma.customer.findMany({
         where,
         include: {
           _count: {
@@ -81,7 +86,7 @@ export class CustomerController {
         orderBy,
         skip,
         take: limitNum
-      });
+      })) as CustomerWithTransactionsCount[];
 
       return res.json({
         success: true,
@@ -109,8 +114,8 @@ export class CustomerController {
       const customerId = id;
       const userId = (req as any).user.id;
 
-      const customer = await prisma.customer.findFirst({
-        where: { 
+      const customer = (await prisma.customer.findFirst({
+        where: {
           id: customerId,
           userId: userId // Kullanıcıya özel müşteri
         },
@@ -138,7 +143,7 @@ export class CustomerController {
             }
           }
         }
-      });
+      })) as CustomerWithTransactionsCount | null;
 
       if (!customer) {
         return res.status(404).json({
@@ -288,8 +293,8 @@ export class CustomerController {
       const userId = (req as any).user.id;
 
       // Müşterinin var olup olmadığını kontrol et
-      const existingCustomer = await prisma.customer.findFirst({
-        where: { 
+      const existingCustomer = (await prisma.customer.findFirst({
+        where: {
           id: customerId,
           userId: userId
         },
@@ -300,7 +305,7 @@ export class CustomerController {
             }
           }
         }
-      });
+      })) as CustomerWithTransactionsCount | null;
 
       if (!existingCustomer) {
         return res.status(404).json({
@@ -310,7 +315,7 @@ export class CustomerController {
       }
 
       // İşlemleri olan müşteriyi silmeye izin verme
-      if (existingCustomer._count.transactions > 0) {
+      if (existingCustomer?._count?.transactions > 0) {
         return res.status(400).json({
           success: false,
           message: 'İşlemleri olan müşteri silinemez'
@@ -475,8 +480,8 @@ export class CustomerController {
       }
 
       // Müşterilerin var olup olmadığını ve yetki kontrolü
-      const customers = await prisma.customer.findMany({
-        where: { 
+      const customers = (await prisma.customer.findMany({
+        where: {
           id: { in: ids },
           userId: userId
         },
@@ -487,7 +492,7 @@ export class CustomerController {
             }
           }
         }
-      });
+      })) as CustomerWithTransactionsCount[];
 
       if (customers.length !== ids.length) {
         return res.status(404).json({
@@ -496,7 +501,9 @@ export class CustomerController {
         });
       }
 
-      const customersWithTransactions = customers.filter(c => c._count.transactions > 0);
+      const customersWithTransactions = customers.filter(
+        c => (c._count?.transactions ?? 0) > 0
+      );
       if (customersWithTransactions.length > 0) {
         return res.status(400).json({
           success: false,

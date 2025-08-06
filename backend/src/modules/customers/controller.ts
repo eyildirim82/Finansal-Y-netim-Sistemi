@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+
 import { PrismaClient, Prisma } from '@prisma/client';
 import { validationResult } from 'express-validator';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,12 +29,12 @@ export class CustomerController {
       const skip = (pageNum - 1) * limitNum;
 
       // Filtreleme koşulları
-      const where: any = {
+      const where: Prisma.CustomerWhereInput = {
         userId: userId // Kullanıcıya özel müşteriler
       };
 
       if (type) {
-        where.type = type;
+        where.type = type as string;
       }
 
       if (search) {
@@ -45,8 +46,20 @@ export class CustomerController {
       }
 
       // Sıralama
-      const orderBy: any = {};
-      orderBy[sortBy as string] = sortOrder;
+      const orderBy: Prisma.CustomerOrderByWithRelationInput = (() => {
+        const order = sortOrder as Prisma.SortOrder;
+        switch (sortBy as string) {
+          case 'phone':
+            return { phone: order };
+          case 'createdAt':
+            return { createdAt: order };
+          case 'updatedAt':
+            return { updatedAt: order };
+          case 'name':
+          default:
+            return { name: order };
+        }
+      })();
 
       // Toplam kayıt sayısı
       const total = await prisma.customer.count({ where });

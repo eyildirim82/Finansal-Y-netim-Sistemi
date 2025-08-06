@@ -59,7 +59,22 @@ export class CashController {
     try {
       const userId = (req as any).user.id;
       const { page = 1, limit = 20, startDate, endDate } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = { userId };
       
@@ -74,7 +89,7 @@ export class CashController {
         where,
         orderBy: { date: 'desc' },
         skip,
-        take: Number(limit)
+        take: limitNum
       });
 
       const total = await prisma.cashFlow.count({ where });
@@ -82,10 +97,10 @@ export class CashController {
       res.json({
         cashFlows,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limitNum)
         }
       });
 
@@ -344,7 +359,22 @@ export class CashController {
     try {
       const userId = (req as any).user.id;
       const { page = 1, limit = 20, startDate, endDate } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
 
       const where: any = {
         userId,
@@ -365,7 +395,7 @@ export class CashController {
         },
         orderBy: { date: 'desc' },
         skip,
-        take: Number(limit)
+        take: limitNum
       });
 
       const total = await prisma.transaction.count({ where });
@@ -373,10 +403,10 @@ export class CashController {
       res.json({
         transactions,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limitNum)
         }
       });
 

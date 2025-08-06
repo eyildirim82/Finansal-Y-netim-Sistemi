@@ -18,8 +18,21 @@ export class CustomerController {
       } = req.query;
 
       const userId = (req as any).user.id;
-      const pageNum = parseInt(page as string);
-      const limitNum = parseInt(limit as string);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
+      if (
+        !Number.isInteger(pageNum) ||
+        !Number.isInteger(limitNum) ||
+        pageNum <= 0 ||
+        limitNum <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
+        });
+      }
+
       const skip = (pageNum - 1) * limitNum;
 
       // Filtreleme koşulları
@@ -408,8 +421,15 @@ export class CustomerController {
     try {
       const { q, limit = 10 } = req.query;
       const searchQuery = q as string;
-      const limitNum = parseInt(limit as string);
+      const limitNum = Number(limit);
       const userId = (req as any).user.id;
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
 
       if (!searchQuery || searchQuery.length < 2) {
         return res.json({

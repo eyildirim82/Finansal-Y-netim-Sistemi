@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { validationResult } from 'express-validator';
+import { t } from '../../utils/i18n';
 
 const prisma = new PrismaClient();
 
@@ -82,10 +83,10 @@ export class CustomerController {
         }
       });
     } catch (error) {
-      console.error('Müşteriler getirilirken hata:', error);
+      console.error(t(req, 'CUSTOMERS_FETCH_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteriler getirilirken bir hata oluştu'
+        message: t(req, 'CUSTOMERS_FETCH_ERROR')
       });
     }
   }
@@ -131,7 +132,7 @@ export class CustomerController {
       if (!customer) {
         return res.status(404).json({
           success: false,
-          message: 'Müşteri bulunamadı'
+          message: t(req, 'CUSTOMER_NOT_FOUND')
         });
       }
 
@@ -140,10 +141,10 @@ export class CustomerController {
         data: customer
       });
     } catch (error) {
-      console.error('Müşteri getirilirken hata:', error);
+      console.error(t(req, 'CUSTOMER_FETCH_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteri getirilirken bir hata oluştu'
+        message: t(req, 'CUSTOMER_FETCH_ERROR')
       });
     }
   }
@@ -155,7 +156,7 @@ export class CustomerController {
       if (!errors.isEmpty()) {
         return res.status(400).json({
           success: false,
-          message: 'Validasyon hatası',
+          message: t(req, 'VALIDATION_ERROR'),
           errors: errors.array()
         });
       }
@@ -188,14 +189,14 @@ export class CustomerController {
 
       return res.status(201).json({
         success: true,
-        message: 'Müşteri başarıyla oluşturuldu',
+        message: t(req, 'CUSTOMER_CREATE_SUCCESS'),
         data: customer
       });
     } catch (error) {
-      console.error('Müşteri oluşturulurken hata:', error);
+      console.error(t(req, 'CUSTOMER_CREATE_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteri oluşturulurken bir hata oluştu'
+        message: t(req, 'CUSTOMER_CREATE_ERROR')
       });
     }
   }
@@ -207,7 +208,7 @@ export class CustomerController {
       if (!errors.isEmpty()) {
         return res.status(400).json({
           success: false,
-          message: 'Validasyon hatası',
+          message: t(req, 'VALIDATION_ERROR'),
           errors: errors.array()
         });
       }
@@ -237,7 +238,7 @@ export class CustomerController {
       if (!existingCustomer) {
         return res.status(404).json({
           success: false,
-          message: 'Müşteri bulunamadı'
+          message: t(req, 'CUSTOMER_NOT_FOUND')
         });
       }
 
@@ -256,14 +257,14 @@ export class CustomerController {
 
       return res.json({
         success: true,
-        message: 'Müşteri başarıyla güncellendi',
+        message: t(req, 'CUSTOMER_UPDATE_SUCCESS'),
         data: customer
       });
     } catch (error) {
-      console.error('Müşteri güncellenirken hata:', error);
+      console.error(t(req, 'CUSTOMER_UPDATE_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteri güncellenirken bir hata oluştu'
+        message: t(req, 'CUSTOMER_UPDATE_ERROR')
       });
     }
   }
@@ -293,7 +294,7 @@ export class CustomerController {
       if (!existingCustomer) {
         return res.status(404).json({
           success: false,
-          message: 'Müşteri bulunamadı'
+          message: t(req, 'CUSTOMER_NOT_FOUND')
         });
       }
 
@@ -301,7 +302,7 @@ export class CustomerController {
       if (existingCustomer._count.transactions > 0) {
         return res.status(400).json({
           success: false,
-          message: 'İşlemleri olan müşteri silinemez'
+          message: t(req, 'CUSTOMER_DELETE_HAS_TRANSACTIONS')
         });
       }
 
@@ -311,13 +312,13 @@ export class CustomerController {
 
       return res.json({
         success: true,
-        message: 'Müşteri başarıyla silindi'
+        message: t(req, 'CUSTOMER_DELETE_SUCCESS')
       });
     } catch (error) {
-      console.error('Müşteri silinirken hata:', error);
+      console.error(t(req, 'CUSTOMER_DELETE_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteri silinirken bir hata oluştu'
+        message: t(req, 'CUSTOMER_DELETE_ERROR')
       });
     }
   }
@@ -340,7 +341,7 @@ export class CustomerController {
       if (!customer) {
         return res.status(404).json({
           success: false,
-          message: 'Müşteri bulunamadı'
+          message: t(req, 'CUSTOMER_NOT_FOUND')
         });
       }
 
@@ -395,10 +396,10 @@ export class CustomerController {
         }
       });
     } catch (error) {
-      console.error('Müşteri istatistikleri getirilirken hata:', error);
+      console.error(t(req, 'CUSTOMER_STATS_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteri istatistikleri getirilirken bir hata oluştu'
+        message: t(req, 'CUSTOMER_STATS_ERROR')
       });
     }
   }
@@ -441,10 +442,10 @@ export class CustomerController {
         data: customers
       });
     } catch (error) {
-      console.error('Müşteri arama hatası:', error);
+      console.error(t(req, 'CUSTOMER_SEARCH_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteri arama sırasında bir hata oluştu'
+        message: t(req, 'CUSTOMER_SEARCH_ERROR')
       });
     }
   }
@@ -458,7 +459,7 @@ export class CustomerController {
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Geçerli ID listesi gerekli'
+          message: t(req, 'CUSTOMER_ID_LIST_REQUIRED')
         });
       }
 
@@ -480,7 +481,7 @@ export class CustomerController {
       if (customers.length !== ids.length) {
         return res.status(404).json({
           success: false,
-          message: 'Bazı müşteriler bulunamadı'
+          message: t(req, 'CUSTOMERS_NOT_FOUND')
         });
       }
 
@@ -488,7 +489,7 @@ export class CustomerController {
       if (customersWithTransactions.length > 0) {
         return res.status(400).json({
           success: false,
-          message: 'İşlemleri olan müşteriler silinemez'
+          message: t(req, 'CUSTOMERS_DELETE_HAS_TRANSACTIONS')
         });
       }
 
@@ -501,14 +502,14 @@ export class CustomerController {
 
       return res.json({
         success: true,
-        message: `${ids.length} müşteri başarıyla silindi`
+        message: t(req, 'CUSTOMERS_DELETE_SUCCESS', { count: ids.length })
       });
     } catch (error) {
-      console.error('Toplu müşteri silme hatası:', error);
+      console.error(t(req, 'CUSTOMERS_DELETE_ERROR_LOG'), error);
       return res.status(500).json({
         success: false,
-        message: 'Müşteriler silinirken bir hata oluştu'
+        message: t(req, 'CUSTOMERS_DELETE_ERROR')
       });
     }
   }
-} 
+}

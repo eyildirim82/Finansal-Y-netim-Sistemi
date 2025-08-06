@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { validationResult } from 'express-validator';
+import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();
 
@@ -176,9 +177,14 @@ export class CustomerController {
 
       const userId = (req as any).user.id;
 
+      let code: string;
+      do {
+        code = `CUST_${uuidv4()}`;
+      } while (await prisma.customer.findUnique({ where: { code } }));
+
       const customer = await prisma.customer.create({
         data: {
-          code: `CUST_${Date.now()}`,
+          code,
           name,
           phone,
           address,

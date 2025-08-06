@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "test": "tsc --noEmit src/modules/customers/dto.ts src/modules/customers/dto.test.ts"
   },
   "keywords": [
     "finansal",

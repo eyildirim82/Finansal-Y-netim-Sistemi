@@ -11,10 +11,6 @@ const customerValidation = [
     .trim()
     .isLength({ min: 1, max: 100 })
     .withMessage('Müşteri adı 1-100 karakter arasında olmalıdır'),
-  body('email')
-    .optional()
-    .isEmail()
-    .withMessage('Geçerli bir email adresi giriniz'),
   body('phone')
     .optional()
     .trim()
@@ -26,18 +22,24 @@ const customerValidation = [
     .isLength({ max: 500 })
     .withMessage('Adres 500 karakterden az olmalıdır'),
   body('type')
+    .optional()
     .isIn(['INDIVIDUAL', 'COMPANY'])
     .withMessage('Müşteri türü INDIVIDUAL veya COMPANY olmalıdır'),
-  body('taxNumber')
+  body('accountType')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Hesap tipi 100 karakterden az olmalıdır'),
+  body('tag1')
     .optional()
     .trim()
     .isLength({ max: 50 })
-    .withMessage('Vergi numarası 50 karakterden az olmalıdır'),
-  body('notes')
+    .withMessage('Etiket 1 50 karakterden az olmalıdır'),
+  body('tag2')
     .optional()
     .trim()
-    .isLength({ max: 1000 })
-    .withMessage('Notlar 1000 karakterden az olmalıdır')
+    .isLength({ max: 50 })
+    .withMessage('Etiket 2 50 karakterden az olmalıdır')
 ];
 
 const updateCustomerValidation = [
@@ -67,7 +69,7 @@ const queryValidation = [
     .withMessage('Arama terimi 1-100 karakter arasında olmalıdır'),
   query('sortBy')
     .optional()
-    .isIn(['name', 'email', 'phone', 'createdAt', 'updatedAt'])
+    .isIn(['name', 'phone', 'createdAt', 'updatedAt'])
     .withMessage('Geçerli bir sıralama alanı giriniz'),
   query('sortOrder')
     .optional()

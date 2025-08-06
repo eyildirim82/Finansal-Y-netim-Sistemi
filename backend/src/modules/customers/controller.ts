@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { validationResult } from 'express-validator';
+import { CreateCustomerDto, UpdateCustomerDto } from './dto';
 
 const prisma = new PrismaClient();
 
@@ -168,7 +169,7 @@ export class CustomerController {
         accountType,
         tag1,
         tag2
-      } = req.body;
+      }: CreateCustomerDto = req.body;
 
       const userId = (req as any).user.id;
 
@@ -224,7 +225,7 @@ export class CustomerController {
         accountType,
         tag1,
         tag2
-      } = req.body;
+      }: UpdateCustomerDto = req.body;
 
       // Müşterinin var olup olmadığını kontrol et
       const existingCustomer = await prisma.customer.findFirst({

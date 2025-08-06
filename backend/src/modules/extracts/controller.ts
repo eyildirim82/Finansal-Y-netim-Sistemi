@@ -12,7 +12,7 @@ const norm = (s: string) =>
   String(s ?? '')
     .replace(/\s+/g, ' ')
     .trim()
-    .toLowerCase();
+    .toLowerCase(); 
 
 const HEADER_ALIASES: Record<string, string> = {
   'belge türü': 'belge türü',
@@ -55,18 +55,48 @@ function canon(label: any): string {
 function cellToString(v: any): string {
   if (v == null || v === undefined) return '';
   if (typeof v === 'object') {
-    if ('richText' in v && Array.isArray((v as any).richText)) {
-      return (v as any).richText.map((p: any) => p.text).join('');
+    if (Array.isArray(v.richText)) {
+      try {
+        return v.richText
+          .map((rt: any) => (rt && typeof rt === 'object' && rt.text != null ? String(rt.text) : ''))
+          .join('')
+          .trim();
+      } catch {
+        return '';
+      }
     }
-    if ('text' in v && typeof (v as any).text === 'string') {
-      return String((v as any).text);
+    if ('text' in v && v.text != null) {
+      try {
+        return String(v.text).trim();
+      } catch {
+        return '';
+      }
     }
-    if (v instanceof Date) return formatYMD(v);
-    if ('result' in v) return String((v as any).result ?? '');
-    if ('formula' in v) return String((v as any).formula ?? '');
-    if ('value' in v) return String((v as any).value ?? '');
+    if (v instanceof Date) return v.toLocaleDateString('tr-TR');
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'object' && v !== null && typeof v.toString === 'function') {
+      try {
+        const str = v.toString();
+        if (typeof str === 'string' && str !== '[object Object]' && str !== 'null' && str !== 'undefined') {
+          return str.trim();
+        }
+      } catch {
+        return '';
+      }
+    }
+    if ('value' in v && v.value != null) {
+      return cellToString(v.value);
+    }
+    return '';
   }
-  return String(v);
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'boolean') return String(v);
+  try {
+    return String(v).trim();
+  } catch {
+    return '';
+  }
 }
 
 function formatYMD(d: Date) {
@@ -76,28 +106,36 @@ function formatYMD(d: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function getText(row: ExcelJS.Row, col?: number) {
-  if (!col) return '';
-  
+function getText(row: ExcelJS.Row, col?: number): string {
+  if (!col || col < 1) return '';
   try {
     const cell = row.getCell(col);
-    
     if (cell.value != null) {
-      return cellToString(cell.value).trim();
+      const result = cellToString(cell.value);
+      if (result) return result;
     }
-    
     try {
-      const text = cell.text;
-      if (text != null) {
-        return cellToString(text).trim();
+      if (cell.text != null) {
+        const result = cellToString(cell.text);
+        if (result) return result;
       }
     } catch (textError: any) {
-      // Sessizce devam et, bu normal bir durum
+      if (process.env.DEBUG_IMPORT === '1') {
+        console.warn(`Text extraction warning for row ${row.number}, col ${col}:`, textError.message);
+      }
     }
-    
+    try {
+      const cellModel = (cell as any).model;
+      if (cellModel && cellModel.value != null) {
+        const result = cellToString(cellModel.value);
+        if (result) return result;
+      }
+    } catch (modelError: any) {}
     return '';
   } catch (error: any) {
-    // Sessizce devam et, bu normal bir durum
+    if (process.env.DEBUG_IMPORT === '1') {
+      console.warn(`Cell access error for row ${row.number}, col ${col}:`, error.message);
+    }
     return '';
   }
 }
@@ -249,36 +287,86 @@ function readCustomerHeader(ws: ExcelJS.Worksheet, startRow: number) {
   let reportedDebtBalance = 0;
   let reportedCreditBalance = 0;
 
-  // İlk 10 satır ve ilk 5 sütunda başlıkları ara
-  for (let r = startRow; r < startRow + 10 && r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
-    for (let c = 1; c <= 5; c++) {
-      const cellVal = cellToString(row.getCell(c));
-      const rightVal = cellToString(row.getCell(c + 1));
-      if (norm(cellVal).includes('cari kodu')) code = rightVal;
-      if (norm(cellVal).includes('cari adı')) name = rightVal;
-      if (norm(cellVal).includes('telefon')) phone = rightVal;
-      if (norm(cellVal).includes('adres')) address = rightVal;
-      if (norm(cellVal).includes('hesap türü')) accountType = rightVal;
-      if (norm(cellVal).includes('özel kod(1)')) tag1 = rightVal;
-      if (norm(cellVal).includes('özel kod(2)')) tag2 = rightVal;
-      if (norm(cellVal).includes('borç') && !norm(cellVal).includes('bakiye')) reportedTotalDebit = parseTL(rightVal);
-      if (norm(cellVal).includes('alacak') && !norm(cellVal).includes('bakiye')) reportedTotalCredit = parseTL(rightVal);
-      if (norm(cellVal).includes('borç bakiye')) reportedDebtBalance = parseTL(rightVal);
-      if (norm(cellVal).includes('alacak bakiye')) reportedCreditBalance = parseTL(rightVal);
+  // İlk 15 satır ve ilk 8 sütunda başlıkları ara (aralığı genişlettik)
+  const maxSearchRows = Math.min(startRow + 15, ws.rowCount);
+  const maxSearchCols = 8;
+
+  for (let r = startRow; r <= maxSearchRows; r++) {
+    try {
+      const row = ws.getRow(r);
+      if (!row || row.cellCount === 0) continue;
+
+      for (let c = 1; c <= maxSearchCols; c++) {
+        try {
+          const cellVal = getText(row, c);
+          const rightVal = getText(row, c + 1);
+          if (!cellVal) continue;
+          const cellNorm = norm(cellVal);
+          if (cellNorm.includes('cari') && cellNorm.includes('kod') && !code) {
+            code = rightVal;
+          } else if ((cellNorm.includes('cari') && cellNorm.includes('ad')) || 
+                    (cellNorm.includes('müşteri') && cellNorm.includes('ad')) && !name) {
+            name = rightVal;
+          } else if (cellNorm.includes('telefon') && !phone) {
+            phone = rightVal;
+          } else if (cellNorm.includes('adres') && !address) {
+            address = rightVal;
+          } else if (cellNorm.includes('hesap') && cellNorm.includes('tür') && !accountType) {
+            accountType = rightVal;
+          } else if (cellNorm.includes('özel') && cellNorm.includes('kod') && cellNorm.includes('1') && !tag1) {
+            tag1 = rightVal;
+          } else if (cellNorm.includes('özel') && cellNorm.includes('kod') && cellNorm.includes('2') && !tag2) {
+            tag2 = rightVal;
+          } else if (cellNorm.includes('borç') && !cellNorm.includes('bakiye') && reportedTotalDebit === 0) {
+            reportedTotalDebit = parseTL(rightVal);
+          } else if (cellNorm.includes('alacak') && !cellNorm.includes('bakiye') && reportedTotalCredit === 0) {
+            reportedTotalCredit = parseTL(rightVal);
+          } else if (cellNorm.includes('borç') && cellNorm.includes('bakiye') && reportedDebtBalance === 0) {
+            reportedDebtBalance = parseTL(rightVal);
+          } else if (cellNorm.includes('alacak') && cellNorm.includes('bakiye') && reportedCreditBalance === 0) {
+            reportedCreditBalance = parseTL(rightVal);
+          }
+        } catch (cellError: any) {
+          if (process.env.DEBUG_IMPORT === '1') {
+            console.warn(`Cell processing error at row ${r}, col ${c}:`, cellError.message);
+          }
+          continue;
+        }
+      }
+    } catch (rowError: any) {
+      if (process.env.DEBUG_IMPORT === '1') {
+        console.warn(`Row processing error at row ${r}:`, rowError.message);
+      }
+      continue;
     }
   }
 
   // İşlem başlığına kadar ilerle
   let nextRow = startRow + 1;
-  while (nextRow <= ws.rowCount) {
-    if (isTxHeaderRow(ws.getRow(nextRow))) break;
+  let headerSearchLimit = 50; // Maksimum arama sınırı
+  let searchCount = 0;
+  while (nextRow <= ws.rowCount && searchCount < headerSearchLimit) {
+    try {
+      const row = ws.getRow(nextRow);
+      if (isTxHeaderRow(row)) {
+        break;
+      }
+    } catch (error: any) {
+      if (process.env.DEBUG_IMPORT === '1') {
+        console.warn(`Header search error at row ${nextRow}:`, error.message);
+      }
+    }
     nextRow++;
+    searchCount++;
+  }
+  // Minimum required fields validation
+  if (!name && !code) {
+    console.warn(`Warning: No customer name or code found starting from row ${startRow}`);
   }
   return {
     header: {
-      code,
-      name,
+      code: code || `AUTO_${Date.now()}`,
+      name: name || 'Bilinmeyen Müşteri',
       phone,
       address,
       accountType,
@@ -383,10 +471,11 @@ export class ExtractController {
         errorRows: processedData.errorRows,
         customers: processedData.customers
       });
-
+      return;
     } catch (error) {
       console.error('Excel yükleme hatası:', error);
       res.status(500).json({ error: 'Dosya işleme hatası' });
+      return;
     }
   }
 
@@ -400,13 +489,13 @@ export class ExtractController {
     let state: 'SEEK_CUSTOMER'|'SEEK_TX_HEADER'|'READ_TX_ROWS' = 'SEEK_CUSTOMER';
     let currentCustomer: any = null;
     const txHeaderMap: Record<string, number> = {};
+    const batch: any[] = [];
 
     console.log(`[DEBUG] Başlangıç: Toplam satır sayısı: ${ws.rowCount}`);
 
     while (i <= ws.rowCount) {
       const row = ws.getRow(i);
-      
-      console.log(`[DEBUG] Satır ${i}: State=${state}, Row values:`, row.values?.slice(0, 3));
+      console.log(`[DEBUG] Satır ${i}: State=${state}, Row values:`, Array.isArray(row?.values) ? row.values.slice(0, 3) : row?.values);
 
       if (state === 'SEEK_CUSTOMER') {
         if (
@@ -476,7 +565,6 @@ export class ExtractController {
         try {
           const txr = parseTxRow(row, txHeaderMap);
           console.log(`[DEBUG] İşlem parse edildi satır ${i}:`, txr);
-          
           // Bozuk satırları ele
           if (!txr.txnDate || isNaN(txr.txnDate.getTime())) { 
             console.log(`[DEBUG] Geçersiz tarih, satır atlanıyor ${i}`);
@@ -488,9 +576,8 @@ export class ExtractController {
             i++; 
             continue; 
           }
-          
-          // İşlem kaydı oluştur
-          const transaction = {
+          // İşlem kaydını batch'e ekle
+          batch.push({
             extractId,
             customerId: currentCustomer.id,
             date: txr.txnDate,
@@ -505,21 +592,25 @@ export class ExtractController {
             amountNet: txr.amountNet || 0,
             vat: txr.vat || 0,
             sourceRow: i + 1
-          };
-
-          console.log(`[DEBUG] Veritabanına kaydediliyor:`, transaction);
-          await prisma.extractTransaction.create({
-            data: transaction
           });
-
           processedRows++;
-          console.log(`[DEBUG] İşlem kaydedildi. Toplam: ${processedRows}`);
+          console.log(`[DEBUG] Batch'e eklendi. Toplam batch: ${batch.length}`);
         } catch (error) {
           console.error(`Satır ${i + 1} işleme hatası:`, error);
           errorRows++;
         }
-
         i++;
+      }
+    }
+
+    // Tüm işlemleri topluca ekle
+    if (batch.length > 0) {
+      try {
+        await prisma.extractTransaction.createMany({ data: batch });
+        console.log(`[DEBUG] Batch insert tamamlandı. Toplam: ${batch.length}`);
+      } catch (err) {
+        console.error('Batch insert hatası:', err);
+        errorRows += batch.length;
       }
     }
 
@@ -586,27 +677,22 @@ export class ExtractController {
     try {
       const { id } = req.params;
       const userId = (req as any).user.id;
-
       const extract = await prisma.extract.findFirst({
         where: { id, userId },
         include: {
           transactions: {
-            include: {
-              customer: true
-            },
+            include: { customer: true },
             orderBy: { date: 'desc' }
           }
         }
       });
-
       if (!extract) {
         return res.status(404).json({ error: 'Ekstre bulunamadı' });
       }
-
-      res.json(extract);
+      return res.json(extract);
     } catch (error) {
       console.error('Ekstre detay hatası:', error);
-      res.status(500).json({ error: 'Ekstre detayı alınamadı' });
+      return res.status(500).json({ error: 'Ekstre detayı alınamadı' });
     }
   }
 
@@ -615,23 +701,17 @@ export class ExtractController {
     try {
       const { extractId } = req.params;
       const userId = (req as any).user.id;
-
       const extract = await prisma.extract.findFirst({
         where: { id: extractId, userId },
         include: {
-          transactions: {
-            include: { customer: true }
-          }
+          transactions: { include: { customer: true } }
         }
       });
-
       if (!extract) {
         return res.status(404).json({ error: 'Ekstre bulunamadı' });
       }
-
       const balanceValidation = await this.calculateBalances(extract.transactions);
-
-      res.json({
+      return res.json({
         extractId,
         balanceValidation,
         summary: {
@@ -640,10 +720,9 @@ export class ExtractController {
           unmatchedBalances: balanceValidation.filter(b => !b.isMatched).length
         }
       });
-
     } catch (error) {
       console.error('Bakiye doğrulama hatası:', error);
-      res.status(500).json({ error: 'Bakiye doğrulama yapılamadı' });
+      return res.status(500).json({ error: 'Bakiye doğrulama yapılamadı' });
     }
   }
 

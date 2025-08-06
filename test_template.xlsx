@@ -1,0 +1,3 @@
+type,amount,description,date,category,customer,reference,notes
+INCOME,1000.00,Müşteri ödemesi,2024-01-15,Satış,ABC Şirketi,INV-001,Ocak ayı ödemesi
+EXPENSE,500.00,Ofis kirası,2024-01-01,Kira,,RENT-001,Aylık kira ödemesi 

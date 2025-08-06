@@ -1,0 +1,4 @@
+Müşteri Adı,Tarih,Açıklama,Borç,Alacak,Belge Tipi
+ABC Şirketi,2024-01-15,Müşteri ödemesi,0,1000.00,Fatura
+XYZ Ltd,2024-01-16,Mal alımı,500.00,0,Sipariş
+DEF A.Ş.,2024-01-17,Hizmet bedeli,0,750.00,Hizmet 

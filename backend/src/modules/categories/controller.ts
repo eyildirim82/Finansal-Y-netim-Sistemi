@@ -373,8 +373,15 @@ export class CategoryController {
     try {
       const { q, type, limit = 10 } = req.query;
       const searchQuery = q as string;
-      const limitNum = parseInt(limit as string);
+      const limitNum = Number(limit);
       const userId = (req as any).user.id;
+
+      if (!Number.isInteger(limitNum) || limitNum <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Limit pozitif tamsayı olmalıdır'
+        });
+      }
 
       if (!searchQuery || searchQuery.length < 2) {
         return res.json({

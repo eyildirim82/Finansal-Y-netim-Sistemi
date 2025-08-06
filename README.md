@@ -133,6 +133,13 @@ LOG_FILE="./logs/app.log"
 FRONTEND_URL="http://localhost:3000"
 ```
 
+## 🌐 Localization
+
+Backend responses are localized using a simple message catalog. The system
+currently supports Turkish and English. The preferred language can be
+specified via the `Accept-Language` header (`tr` or `en`). To add or edit
+translations, update `backend/src/utils/i18n.ts`.
+
 ## 📊 Veritabanı Şeması
 
 ### Ana Tablolar

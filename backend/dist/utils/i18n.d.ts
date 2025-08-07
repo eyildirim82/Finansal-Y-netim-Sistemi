@@ -1,0 +1,67 @@
+import { Request } from 'express';
+declare const messages: {
+    readonly tr: {
+        readonly CUSTOMERS_FETCH_ERROR: "Müşteriler getirilirken bir hata oluştu";
+        readonly CUSTOMER_NOT_FOUND: "Müşteri bulunamadı";
+        readonly CUSTOMER_FETCH_ERROR: "Müşteri getirilirken bir hata oluştu";
+        readonly VALIDATION_ERROR: "Validasyon hatası";
+        readonly CUSTOMER_CREATE_SUCCESS: "Müşteri başarıyla oluşturuldu";
+        readonly CUSTOMER_CREATE_ERROR: "Müşteri oluşturulurken bir hata oluştu";
+        readonly CUSTOMER_UPDATE_SUCCESS: "Müşteri başarıyla güncellendi";
+        readonly CUSTOMER_UPDATE_ERROR: "Müşteri güncellenirken bir hata oluştu";
+        readonly CUSTOMER_DELETE_HAS_TRANSACTIONS: "İşlemleri olan müşteri silinemez";
+        readonly CUSTOMER_DELETE_ERROR: "Müşteri silinirken bir hata oluştu";
+        readonly CUSTOMER_DELETE_SUCCESS: "Müşteri başarıyla silindi";
+        readonly CUSTOMER_STATS_ERROR: "Müşteri istatistikleri getirilirken bir hata oluştu";
+        readonly CUSTOMER_SEARCH_ERROR: "Müşteri arama sırasında bir hata oluştu";
+        readonly CUSTOMER_ID_LIST_REQUIRED: "Geçerli ID listesi gerekli";
+        readonly CUSTOMERS_NOT_FOUND: "Bazı müşteriler bulunamadı";
+        readonly CUSTOMERS_DELETE_HAS_TRANSACTIONS: "İşlemleri olan müşteriler silinemez";
+        readonly CUSTOMERS_DELETE_SUCCESS: "{count} müşteri başarıyla silindi";
+        readonly CUSTOMERS_DELETE_ERROR: "Müşteriler silinirken bir hata oluştu";
+        readonly CUSTOMERS_FETCH_ERROR_LOG: "Müşteriler getirilirken hata:";
+        readonly CUSTOMER_FETCH_ERROR_LOG: "Müşteri getirilirken hata:";
+        readonly CUSTOMER_CREATE_ERROR_LOG: "Müşteri oluşturulurken hata:";
+        readonly CUSTOMER_UPDATE_ERROR_LOG: "Müşteri güncellenirken hata:";
+        readonly CUSTOMER_DELETE_ERROR_LOG: "Müşteri silinirken hata:";
+        readonly CUSTOMER_STATS_ERROR_LOG: "Müşteri istatistikleri getirilirken hata:";
+        readonly CUSTOMER_SEARCH_ERROR_LOG: "Müşteri arama hatası:";
+        readonly CUSTOMERS_DELETE_ERROR_LOG: "Toplu müşteri silme hatası:";
+    };
+    readonly en: {
+        readonly CUSTOMERS_FETCH_ERROR: "An error occurred while fetching customers";
+        readonly CUSTOMER_NOT_FOUND: "Customer not found";
+        readonly CUSTOMER_FETCH_ERROR: "An error occurred while fetching the customer";
+        readonly VALIDATION_ERROR: "Validation error";
+        readonly CUSTOMER_CREATE_SUCCESS: "Customer created successfully";
+        readonly CUSTOMER_CREATE_ERROR: "An error occurred while creating the customer";
+        readonly CUSTOMER_UPDATE_SUCCESS: "Customer updated successfully";
+        readonly CUSTOMER_UPDATE_ERROR: "An error occurred while updating the customer";
+        readonly CUSTOMER_DELETE_HAS_TRANSACTIONS: "Cannot delete a customer with transactions";
+        readonly CUSTOMER_DELETE_ERROR: "An error occurred while deleting the customer";
+        readonly CUSTOMER_DELETE_SUCCESS: "Customer deleted successfully";
+        readonly CUSTOMER_STATS_ERROR: "An error occurred while fetching customer statistics";
+        readonly CUSTOMER_SEARCH_ERROR: "An error occurred during customer search";
+        readonly CUSTOMER_ID_LIST_REQUIRED: "A valid ID list is required";
+        readonly CUSTOMERS_NOT_FOUND: "Some customers were not found";
+        readonly CUSTOMERS_DELETE_HAS_TRANSACTIONS: "Customers with transactions cannot be deleted";
+        readonly CUSTOMERS_DELETE_SUCCESS: "{count} customers deleted successfully";
+        readonly CUSTOMERS_DELETE_ERROR: "An error occurred while deleting customers";
+        readonly CUSTOMERS_FETCH_ERROR_LOG: "Error fetching customers:";
+        readonly CUSTOMER_FETCH_ERROR_LOG: "Error fetching customer:";
+        readonly CUSTOMER_CREATE_ERROR_LOG: "Error creating customer:";
+        readonly CUSTOMER_UPDATE_ERROR_LOG: "Error updating customer:";
+        readonly CUSTOMER_DELETE_ERROR_LOG: "Error deleting customer:";
+        readonly CUSTOMER_STATS_ERROR_LOG: "Error fetching customer statistics:";
+        readonly CUSTOMER_SEARCH_ERROR_LOG: "Customer search error:";
+        readonly CUSTOMERS_DELETE_ERROR_LOG: "Bulk customer delete error:";
+    };
+};
+export type Locale = keyof typeof messages;
+export type MessageKey = keyof typeof messages['tr'];
+export declare function t(req: Request, key: MessageKey, vars?: Record<string, string | number>): string;
+declare const _default: {
+    t: typeof t;
+};
+export default _default;
+//# sourceMappingURL=i18n.d.ts.map

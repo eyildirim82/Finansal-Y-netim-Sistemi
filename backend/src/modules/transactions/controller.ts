@@ -116,19 +116,22 @@ export class TransactionController {
         take: limitNum
       });
 
-      res.json({
+      return res.json({
         success: true,
-        transactions,
-        total,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          pages: Math.ceil(total / limitNum)
+        data: {
+          transactions,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
         }
       });
+
     } catch (error) {
       logError('İşlemler getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'İşlemler getirilirken bir hata oluştu'
       });
@@ -139,26 +142,22 @@ export class TransactionController {
   static async getTransaction(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const transactionId = id;
 
       const transaction = await prisma.transaction.findUnique({
-        where: { id: transactionId },
+        where: { id },
         include: {
           customer: {
             select: {
               id: true,
               name: true,
               phone: true,
-              code: true,
-              address: true,
-              type: true
+              code: true
             }
           },
           category: {
             select: {
               id: true,
-              name: true,
-              description: true
+              name: true
             }
           },
           user: {
@@ -178,13 +177,13 @@ export class TransactionController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: transaction
       });
     } catch (error) {
       logError('İşlem getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'İşlem getirilirken bir hata oluştu'
       });
@@ -209,9 +208,7 @@ export class TransactionController {
         description,
         date,
         categoryId,
-        customerId,
-        reference,
-        notes
+        customerId
       } = req.body;
 
       const userId = (req as any).user.id;
@@ -224,8 +221,6 @@ export class TransactionController {
           date: new Date(date),
           categoryId: categoryId ? categoryId : null,
           customerId: customerId ? customerId : null,
-          reference,
-          notes,
           userId
         },
         include: {
@@ -245,14 +240,14 @@ export class TransactionController {
         }
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         message: 'İşlem başarıyla oluşturuldu',
         data: transaction
       });
     } catch (error) {
       logError('İşlem oluşturulurken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'İşlem oluşturulurken bir hata oluştu'
       });
@@ -272,23 +267,18 @@ export class TransactionController {
       }
 
       const { id } = req.params;
-      const transactionId = id;
-      const userId = (req as any).user.id;
-
       const {
         type,
         amount,
         description,
         date,
         categoryId,
-        customerId,
-        reference,
-        notes
+        customerId
       } = req.body;
 
       // İşlemin var olup olmadığını kontrol et
       const existingTransaction = await prisma.transaction.findUnique({
-        where: { id: transactionId }
+        where: { id }
       });
 
       if (!existingTransaction) {
@@ -298,25 +288,15 @@ export class TransactionController {
         });
       }
 
-      // Sadece kendi işlemlerini güncelleyebilir (admin hariç)
-      if (existingTransaction.userId !== userId && (req as any).user.role !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Bu işlemi güncelleme yetkiniz yok'
-        });
-      }
-
-      const transaction = await prisma.transaction.update({
-        where: { id: transactionId },
+      const updatedTransaction = await prisma.transaction.update({
+        where: { id },
         data: {
           type,
           amount: parseFloat(amount),
           description,
           date: new Date(date),
           categoryId: categoryId ? categoryId : null,
-          customerId: customerId ? customerId : null,
-          reference,
-          notes
+          customerId: customerId ? customerId : null
         },
         include: {
           customer: {
@@ -335,14 +315,15 @@ export class TransactionController {
         }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'İşlem başarıyla güncellendi',
-        data: transaction
+        data: updatedTransaction
       });
+
     } catch (error) {
       logError('İşlem güncellenirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'İşlem güncellenirken bir hata oluştu'
       });
@@ -353,12 +334,10 @@ export class TransactionController {
   static async deleteTransaction(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const transactionId = id;
-      const userId = (req as any).user.id;
 
       // İşlemin var olup olmadığını kontrol et
       const existingTransaction = await prisma.transaction.findUnique({
-        where: { id: transactionId }
+        where: { id }
       });
 
       if (!existingTransaction) {
@@ -368,25 +347,18 @@ export class TransactionController {
         });
       }
 
-      // Sadece kendi işlemlerini silebilir (admin hariç)
-      if (existingTransaction.userId !== userId && (req as any).user.role !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Bu işlemi silme yetkiniz yok'
-        });
-      }
-
       await prisma.transaction.delete({
-        where: { id: transactionId }
+        where: { id }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'İşlem başarıyla silindi'
       });
+
     } catch (error) {
       logError('İşlem silinirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'İşlem silinirken bir hata oluştu'
       });
@@ -396,9 +368,10 @@ export class TransactionController {
   // İşlem istatistikleri
   static async getTransactionStats(req: Request, res: Response) {
     try {
-      const { startDate, endDate, customerId, categoryId } = req.query;
+      const { startDate, endDate, type } = req.query;
+      const userId = (req as any).user.id;
 
-      const where: any = {};
+      const where: any = { userId };
 
       if (startDate || endDate) {
         where.date = {};
@@ -410,122 +383,134 @@ export class TransactionController {
         }
       }
 
-      if (customerId) {
-        where.customerId = customerId as string;
+      if (type) {
+        where.type = type;
       }
 
-      if (categoryId) {
-        where.categoryId = categoryId as string;
-      }
-
-      // Toplam gelir ve gider
-      const incomeStats = await prisma.transaction.aggregate({
-        where: { ...where, type: 'INCOME' },
-        _sum: { amount: true },
-        _count: true
+      // Toplam istatistikler
+      const totalStats = await prisma.transaction.aggregate({
+        where,
+        _sum: {
+          amount: true
+        },
+        _count: {
+          id: true
+        }
       });
 
+      // Gelir istatistikleri
+      const incomeStats = await prisma.transaction.aggregate({
+        where: { ...where, type: 'INCOME' },
+        _sum: {
+          amount: true
+        },
+        _count: {
+          id: true
+        }
+      });
+
+      // Gider istatistikleri
       const expenseStats = await prisma.transaction.aggregate({
         where: { ...where, type: 'EXPENSE' },
-        _sum: { amount: true },
-        _count: true
+        _sum: {
+          amount: true
+        },
+        _count: {
+          id: true
+        }
       });
 
       // Kategori bazında istatistikler
       const categoryStats = await prisma.transaction.groupBy({
-        by: ['categoryId', 'type'],
+        by: ['categoryId'],
         where,
-        _sum: { amount: true },
-        _count: true
+        _sum: {
+          amount: true
+        },
+        _count: {
+          id: true
+        }
       });
 
       // Müşteri bazında istatistikler
       const customerStats = await prisma.transaction.groupBy({
-        by: ['customerId', 'type'],
+        by: ['customerId'],
         where,
-        _sum: { amount: true },
-        _count: true
-      });
-
-      // Aylık trend
-      const monthlyTrend = await prisma.transaction.groupBy({
-        by: ['type'],
-        where,
-        _sum: { amount: true },
-        _count: true
-      });
-
-      res.json({
-        success: true,
-        data: {
-          summary: {
-            totalIncome: incomeStats._sum.amount || 0,
-            totalExpense: expenseStats._sum.amount || 0,
-            netAmount: (incomeStats._sum.amount || 0) - (expenseStats._sum.amount || 0),
-            incomeCount: incomeStats._count,
-            expenseCount: expenseStats._count
-          },
-          categoryStats,
-          customerStats,
-          monthlyTrend
+        _sum: {
+          amount: true
+        },
+        _count: {
+          id: true
         }
       });
+
+      const stats = {
+        summary: {
+          totalTransactions: totalStats._count?.id || 0,
+          totalAmount: totalStats._sum?.amount || 0,
+          totalIncome: incomeStats._sum?.amount || 0,
+          totalExpense: expenseStats._count?.id || 0,
+          netAmount: (incomeStats._sum?.amount || 0) - (expenseStats._sum?.amount || 0)
+        },
+        categoryStats,
+        customerStats
+      };
+
+      return res.json({
+        success: true,
+        data: stats
+      });
+
     } catch (error) {
-      logError('İşlem istatistikleri getirilirken hata:', error);
-      res.status(500).json({
+      logError('İşlem istatistikleri hatası:', error);
+      return res.status(500).json({
         success: false,
-        message: 'İşlem istatistikleri getirilirken bir hata oluştu'
+        message: 'İşlem istatistikleri alınırken bir hata oluştu'
       });
     }
   }
 
-  // Toplu işlem silme
+  // Çoklu işlem silme
   static async deleteMultipleTransactions(req: Request, res: Response) {
     try {
       const { ids } = req.body;
-      const userId = (req as any).user.id;
 
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Geçerli ID listesi gerekli'
+          message: 'Geçerli işlem ID\'leri gerekli'
         });
       }
 
-      // İşlemlerin var olup olmadığını ve yetki kontrolü
-      const transactions = await prisma.transaction.findMany({
-        where: { id: { in: ids } }
+      // İşlemlerin var olup olmadığını kontrol et
+      const existingTransactions = await prisma.transaction.findMany({
+        where: {
+          id: { in: ids }
+        }
       });
 
-      if (transactions.length !== ids.length) {
-        return res.status(404).json({
+      if (existingTransactions.length !== ids.length) {
+        return res.status(400).json({
           success: false,
           message: 'Bazı işlemler bulunamadı'
         });
       }
 
-      // Yetki kontrolü (admin değilse sadece kendi işlemlerini silebilir)
-      if ((req as any).user.role !== 'ADMIN') {
-        const unauthorizedTransactions = transactions.filter(t => t.userId !== userId);
-        if (unauthorizedTransactions.length > 0) {
-          return res.status(403).json({
-            success: false,
-            message: 'Bazı işlemleri silme yetkiniz yok'
-          });
-        }
-      }
-
+      // İşlemleri sil
       await prisma.transaction.deleteMany({
-        where: { id: { in: ids } }
+        where: {
+          id: { in: ids }
+        }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: `${ids.length} işlem başarıyla silindi`
       });
+
     } catch (error) {
-      logError('Toplu işlem silme hatası:', error);
-      res.status(500).json({
+      logError('Çoklu işlem silme hatası:', error);
+      return res.status(500).json({
         success: false,
         message: 'İşlemler silinirken bir hata oluştu'
       });

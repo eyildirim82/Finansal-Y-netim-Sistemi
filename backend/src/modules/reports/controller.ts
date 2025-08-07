@@ -188,15 +188,15 @@ export class ReportController {
         monthlyTrend[monthIndex].net = monthlyTrend[monthIndex].income - monthlyTrend[monthIndex].expense;
       });
 
-      res.json({
+      return res.json({
         success: true,
         data: monthlyTrend
       });
     } catch (error) {
-      logError('Aylık trend getirilirken hata:', error);
-      res.status(500).json({
+      logError('Aylık trend raporu hatası:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Aylık trend getirilirken bir hata oluştu'
+        message: 'Aylık trend raporu getirilirken bir hata oluştu'
       });
     }
   }
@@ -236,7 +236,7 @@ export class ReportController {
       // Kategori bilgilerini al
       const categoryIds = [...new Set(categoryStats.map(stat => stat.categoryId).filter(Boolean))];
       const categories = await prisma.category.findMany({
-        where: { id: { in: categoryIds as number[] } },
+        where: { id: { in: categoryIds as string[] } },
         select: { id: true, name: true }
       });
 
@@ -361,13 +361,13 @@ export class ReportController {
         .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
         .slice(0, limitNum);
 
-      res.json({
+      return res.json({
         success: true,
         data: sortedReport
       });
     } catch (error) {
       logError('Müşteri raporu getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri raporu getirilirken bir hata oluştu'
       });
@@ -414,7 +414,7 @@ export class ReportController {
       // Tarih aralığındaki tüm günleri oluştur
       const start = new Date(startDate as string);
       const end = new Date(endDate as string);
-      const dailyTrend = [];
+      const dailyTrend: any[] = [];
 
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         dailyTrend.push({
@@ -439,15 +439,15 @@ export class ReportController {
         }
       });
 
-      res.json({
+      return res.json({
         success: true,
         data: dailyTrend
       });
     } catch (error) {
-      logError('Günlük trend getirilirken hata:', error);
-      res.status(500).json({
+      logError('Günlük trend raporu hatası:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Günlük trend getirilirken bir hata oluştu'
+        message: 'Günlük trend raporu getirilirken bir hata oluştu'
       });
     }
   }
@@ -503,40 +503,42 @@ export class ReportController {
       // Kategori bilgilerini al
       const categoryIds = [...new Set(categoryCashFlow.map(flow => flow.categoryId).filter(Boolean))];
       const categories = await prisma.category.findMany({
-        where: { id: { in: categoryIds as number[] } },
+        where: { id: { in: categoryIds as string[] } },
         select: { id: true, name: true }
       });
 
       // Müşteri bilgilerini al
       const customerIds = [...new Set(customerCashFlow.map(flow => flow.customerId).filter(Boolean))];
       const customers = await prisma.customer.findMany({
-        where: { id: { in: customerIds as number[] } },
+        where: { id: { in: customerIds as string[] } },
         select: { id: true, name: true, type: true }
       });
 
-      res.json({
+      const cashFlowReport = {
+        summary: {
+          totalIncome: incomeTotal._sum.amount || 0,
+          totalExpense: expenseTotal._sum.amount || 0,
+          netCashFlow: (incomeTotal._sum.amount || 0) - (expenseTotal._sum.amount || 0)
+        },
+        categoryCashFlow: categoryCashFlow.map(flow => ({
+          category: categories.find(c => c.id === flow.categoryId),
+          type: flow.type,
+          amount: flow._sum.amount || 0
+        })),
+        customerCashFlow: customerCashFlow.map(flow => ({
+          customer: customers.find(c => c.id === flow.customerId),
+          type: flow.type,
+          amount: flow._sum.amount || 0
+        }))
+      };
+
+      return res.json({
         success: true,
-        data: {
-          summary: {
-            totalIncome: incomeTotal._sum.amount || 0,
-            totalExpense: expenseTotal._sum.amount || 0,
-            netCashFlow: (incomeTotal._sum.amount || 0) - (expenseTotal._sum.amount || 0)
-          },
-          categoryCashFlow: categoryCashFlow.map(flow => ({
-            category: categories.find(c => c.id === flow.categoryId),
-            type: flow.type,
-            amount: flow._sum.amount || 0
-          })),
-          customerCashFlow: customerCashFlow.map(flow => ({
-            customer: customers.find(c => c.id === flow.customerId),
-            type: flow.type,
-            amount: flow._sum.amount || 0
-          }))
-        }
+        data: cashFlowReport
       });
     } catch (error) {
       logError('Nakit akışı raporu getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Nakit akışı raporu getirilirken bir hata oluştu'
       });

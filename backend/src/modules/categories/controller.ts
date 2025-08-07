@@ -85,13 +85,13 @@ export class CategoryController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: category
       });
     } catch (error) {
       logError('Kategori getirilirken hata:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Kategori getirilirken bir hata oluştu'
       });
@@ -112,8 +112,6 @@ export class CategoryController {
 
       const {
         name,
-        description,
-        color,
         type
       } = req.body;
 
@@ -123,6 +121,7 @@ export class CategoryController {
       const existingCategory = await prisma.category.findFirst({
         where: { 
           name,
+          type,
           userId
         }
       });
@@ -137,21 +136,20 @@ export class CategoryController {
       const category = await prisma.category.create({
         data: {
           name,
-          description,
-          color,
           type,
           userId
         }
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         message: 'Kategori başarıyla oluşturuldu',
         data: category
       });
+
     } catch (error) {
-      logError('Kategori oluşturulurken hata:', error);
-      res.status(500).json({
+      logError('Kategori oluşturma hatası:', error);
+      return res.status(500).json({
         success: false,
         message: 'Kategori oluşturulurken bir hata oluştu'
       });
@@ -171,17 +169,15 @@ export class CategoryController {
       }
 
       const { id } = req.params;
-      const categoryId = parseInt(id);
-      const userId = (req as any).user.id;
-
+      const categoryId = id;
       const {
         name,
-        description,
-        color,
         type
       } = req.body;
 
-      // Kategorinin var olup olmadığını kontrol et
+      const userId = (req as any).user.id;
+
+      // Kategori var mı kontrol et
       const existingCategory = await prisma.category.findUnique({
         where: { id: categoryId }
       });
@@ -193,18 +189,19 @@ export class CategoryController {
         });
       }
 
-      // Sadece kendi kategorilerini güncelleyebilir (admin hariç)
-      if (existingCategory.userId !== userId && (req as any).user.role !== 'ADMIN') {
+      // Kullanıcı yetkisi kontrol et
+      if (existingCategory.userId !== userId) {
         return res.status(403).json({
           success: false,
-          message: 'Bu kategoriyi güncelleme yetkiniz yok'
+          message: 'Bu kategoriyi düzenleme yetkiniz yok'
         });
       }
 
-      // Kategori adı benzersizlik kontrolü (kendi adı hariç)
+      // Yeni isim benzersizlik kontrolü
       const duplicateCategory = await prisma.category.findFirst({
-        where: { 
+        where: {
           name,
+          type,
           userId,
           id: { not: categoryId }
         }
@@ -213,28 +210,27 @@ export class CategoryController {
       if (duplicateCategory) {
         return res.status(400).json({
           success: false,
-          message: 'Bu isimde bir kategori zaten mevcut'
+          message: 'Bu isimde başka bir kategori zaten mevcut'
         });
       }
 
-      const category = await prisma.category.update({
+      const updatedCategory = await prisma.category.update({
         where: { id: categoryId },
         data: {
           name,
-          description,
-          color,
           type
         }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Kategori başarıyla güncellendi',
-        data: category
+        data: updatedCategory
       });
+
     } catch (error) {
-      logError('Kategori güncellenirken hata:', error);
-      res.status(500).json({
+      logError('Kategori güncelleme hatası:', error);
+      return res.status(500).json({
         success: false,
         message: 'Kategori güncellenirken bir hata oluştu'
       });
@@ -245,10 +241,10 @@ export class CategoryController {
   static async deleteCategory(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const categoryId = parseInt(id);
+      const categoryId = id;
       const userId = (req as any).user.id;
 
-      // Kategorinin var olup olmadığını kontrol et
+      // Kategori var mı kontrol et
       const existingCategory = await prisma.category.findUnique({
         where: { id: categoryId },
         include: {
@@ -267,19 +263,19 @@ export class CategoryController {
         });
       }
 
-      // Sadece kendi kategorilerini silebilir (admin hariç)
-      if (existingCategory.userId !== userId && (req as any).user.role !== 'ADMIN') {
+      // Kullanıcı yetkisi kontrol et
+      if (existingCategory.userId !== userId) {
         return res.status(403).json({
           success: false,
           message: 'Bu kategoriyi silme yetkiniz yok'
         });
       }
 
-      // İşlemleri olan kategoriyi silmeye izin verme
+      // Kategoriye bağlı işlem var mı kontrol et
       if (existingCategory._count.transactions > 0) {
         return res.status(400).json({
           success: false,
-          message: 'İşlemleri olan kategori silinemez'
+          message: 'Bu kategoriye bağlı işlemler bulunduğu için silinemez'
         });
       }
 
@@ -287,13 +283,14 @@ export class CategoryController {
         where: { id: categoryId }
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Kategori başarıyla silindi'
       });
+
     } catch (error) {
-      logError('Kategori silinirken hata:', error);
-      res.status(500).json({
+      logError('Kategori silme hatası:', error);
+      return res.status(500).json({
         success: false,
         message: 'Kategori silinirken bir hata oluştu'
       });
@@ -303,10 +300,11 @@ export class CategoryController {
   // Kategori istatistikleri
   static async getCategoryStats(req: Request, res: Response) {
     try {
-      const { categoryId } = req.params;
-      const categoryIdNum = parseInt(categoryId);
+      const { id } = req.params;
+      const categoryIdNum = id;
+      const userId = (req as any).user.id;
 
-      // Kategorinin var olup olmadığını kontrol et
+      // Kategori var mı kontrol et
       const category = await prisma.category.findUnique({
         where: { id: categoryIdNum }
       });
@@ -318,87 +316,90 @@ export class CategoryController {
         });
       }
 
-      // Kategori işlem istatistikleri
+      // Gelir istatistikleri
       const incomeStats = await prisma.transaction.aggregate({
-        where: { 
+        where: {
           categoryId: categoryIdNum,
-          type: 'INCOME'
+          type: 'INCOME',
+          userId
         },
-        _sum: { amount: true },
-        _count: true
-      });
-
-      const expenseStats = await prisma.transaction.aggregate({
-        where: { 
-          categoryId: categoryIdNum,
-          type: 'EXPENSE'
+        _sum: {
+          amount: true
         },
-        _sum: { amount: true },
-        _count: true
-      });
-
-      // Aylık trend
-      const monthlyStats = await prisma.transaction.groupBy({
-        by: ['type'],
-        where: { categoryId: categoryIdNum },
-        _sum: { amount: true },
-        _count: true
-      });
-
-      res.json({
-        success: true,
-        data: {
-          category,
-          summary: {
-            totalIncome: incomeStats._sum.amount || 0,
-            totalExpense: expenseStats._sum.amount || 0,
-            netAmount: (incomeStats._sum.amount || 0) - (expenseStats._sum.amount || 0),
-            incomeCount: incomeStats._count,
-            expenseCount: expenseStats._count
-          },
-          monthlyStats
+        _count: {
+          id: true
         }
       });
+
+      // Gider istatistikleri
+      const expenseStats = await prisma.transaction.aggregate({
+        where: {
+          categoryId: categoryIdNum,
+          type: 'EXPENSE',
+          userId
+        },
+        _sum: {
+          amount: true
+        },
+        _count: {
+          id: true
+        }
+      });
+
+      // Son işlemler
+      const recentTransactions = await prisma.transaction.findMany({
+        where: { categoryId: categoryIdNum },
+        orderBy: { date: 'desc' },
+        take: 10,
+        include: {
+          customer: true
+        }
+      });
+
+      const stats = {
+        category,
+        summary: {
+          totalIncome: incomeStats._sum?.amount || 0,
+          totalExpense: expenseStats._sum?.amount || 0,
+          netAmount: (incomeStats._sum?.amount || 0) - (expenseStats._sum?.amount || 0),
+          incomeCount: incomeStats._count?.id || 0,
+          expenseCount: expenseStats._count?.id || 0,
+          totalCount: (incomeStats._count?.id || 0) + (expenseStats._count?.id || 0)
+        },
+        recentTransactions
+      };
+
+      return res.json({
+        success: true,
+        data: stats
+      });
+
     } catch (error) {
-      logError('Kategori istatistikleri getirilirken hata:', error);
-      res.status(500).json({
+      logError('Kategori istatistikleri hatası:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Kategori istatistikleri getirilirken bir hata oluştu'
+        message: 'Kategori istatistikleri alınırken bir hata oluştu'
       });
     }
   }
 
-  // Kategori arama (autocomplete için)
+  // Kategori arama
   static async searchCategories(req: Request, res: Response) {
     try {
-      const { q, type, limit = 10 } = req.query;
-      const searchQuery = q as string;
-      const limitNum = Number(limit);
+      const { q, type, page = 1, limit = 20 } = req.query;
       const userId = (req as any).user.id;
 
-      if (!Number.isInteger(limitNum) || limitNum <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Limit pozitif tamsayı olmalıdır'
-        });
-      }
+      const pageNum = parseInt(page as string) || 1;
+      const limitNum = parseInt(limit as string) || 20;
+      const skip = (pageNum - 1) * limitNum;
 
-      if (!searchQuery || searchQuery.length < 2) {
-        return res.json({
-          success: true,
-          data: []
-        });
-      }
+      const where: any = { userId };
 
-      const where: any = {
-        OR: [
-          { name: { contains: searchQuery, mode: 'insensitive' } },
-          { description: { contains: searchQuery, mode: 'insensitive' } }
-        ]
-      };
-
-      if ((req as any).user.role !== 'ADMIN') {
-        where.userId = userId;
+      if (q) {
+        where.name = {
+          contains: q as string,
+          mode: 'insensitive'
+        };
       }
 
       if (type) {
@@ -407,23 +408,36 @@ export class CategoryController {
 
       const categories = await prisma.category.findMany({
         where,
-        select: {
-          id: true,
-          name: true,
-          
-          type: true
+        include: {
+          _count: {
+            select: {
+              transactions: true
+            }
+          }
         },
-        take: limitNum,
-        orderBy: { name: 'asc' }
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum
       });
 
-      res.json({
+      const total = await prisma.category.count({ where });
+
+      return res.json({
         success: true,
-        data: categories
+        data: {
+          categories,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
+        }
       });
+
     } catch (error) {
       logError('Kategori arama hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Kategori arama sırasında bir hata oluştu'
       });

@@ -66,7 +66,7 @@ export class BankingController {
 
       const metrics = this.emailService.getMetrics();
 
-      res.json({
+      return res.json({
         success: true,
         message: `${processedTransactions.length} email işlendi, ${duplicateCount} duplikasyon`,
         data: {
@@ -79,7 +79,7 @@ export class BankingController {
 
     } catch (error) {
       logError('Otomatik email çekme hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Email çekme sırasında hata oluştu',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -131,7 +131,7 @@ export class BankingController {
       const matchResult = await this.matchingService.matchTransaction(savedTransaction);
       await this.matchingService.saveMatchResult(savedTransaction.id, matchResult);
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Email başarıyla işlendi',
         data: {
@@ -142,44 +142,57 @@ export class BankingController {
 
     } catch (error) {
       logError('Email işleme hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Email işlenirken hata oluştu'
       });
     }
   }
 
-  // Banka işlemleri listesi
+  // Banka işlemlerini getir
   async getBankTransactions(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 20, direction, isMatched } = req.query;
-      const pageNum = Number(page);
-      const limitNum = Number(limit);
-
-      if (
-        !Number.isInteger(pageNum) ||
-        !Number.isInteger(limitNum) ||
-        pageNum <= 0 ||
-        limitNum <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: 'Sayfa ve limit pozitif tamsayı olmalıdır'
-        });
-      }
-
+      const { page = 1, limit = 20, direction, isMatched, startDate, endDate } = req.query;
+      
+      const pageNum = parseInt(page as string) || 1;
+      const limitNum = parseInt(limit as string) || 20;
       const skip = (pageNum - 1) * limitNum;
 
+      // Filtreleme koşulları
       const where: any = {};
+      
       if (direction) where.direction = direction;
       if (isMatched !== undefined) where.isMatched = isMatched === 'true';
+      if (startDate || endDate) {
+        where.transactionDate = {};
+        if (startDate) where.transactionDate.gte = new Date(startDate as string);
+        if (endDate) where.transactionDate.lte = new Date(endDate as string);
+      }
 
+      // Toplam sayı
+      const total = await prisma.bankTransaction.count({ where });
+
+      // İşlemleri getir
       const transactions = await prisma.bankTransaction.findMany({
         where,
         include: {
-          customer: true,
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          },
           paymentMatches: {
-            include: { customer: true }
+            include: {
+              customer: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true
+                }
+              }
+            }
           }
         },
         orderBy: { transactionDate: 'desc' },
@@ -187,55 +200,73 @@ export class BankingController {
         take: limitNum
       });
 
-      const total = await prisma.bankTransaction.count({ where });
-
-      res.json({
-        transactions,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          pages: Math.ceil(total / limitNum)
+      return res.json({
+        success: true,
+        data: {
+          transactions,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
         }
       });
 
     } catch (error) {
       logError('Banka işlemleri getirme hatası:', error);
-      res.status(500).json({ error: 'Banka işlemleri getirilemedi' });
+      return res.status(500).json({
+        success: false,
+        error: 'Banka işlemleri getirilemedi'
+      });
     }
   }
 
-  // Eşleşmeyen ödemeler
+  // Eşleşmemiş ödemeleri getir
   async getUnmatchedPayments(req: Request, res: Response) {
     try {
-      const { limit = 50 } = req.query;
-      const limitNum = Number(limit);
+      const { page = 1, limit = 20 } = req.query;
+      
+      const pageNum = parseInt(page as string) || 1;
+      const limitNum = parseInt(limit as string) || 20;
+      const skip = (pageNum - 1) * limitNum;
 
-      if (!Number.isInteger(limitNum) || limitNum <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Limit pozitif tamsayı olmalıdır'
-        });
-      }
+      // Toplam sayı
+      const total = await prisma.bankTransaction.count({
+        where: { isMatched: false }
+      });
 
-      const transactions = await this.matchingService.getUnmatchedTransactions(limitNum);
+      // Eşleşmemiş işlemleri getir
+      const transactions = await prisma.bankTransaction.findMany({
+        where: { isMatched: false },
+        orderBy: { transactionDate: 'desc' },
+        skip,
+        take: limitNum
+      });
 
-      res.json({
+      return res.json({
         success: true,
-        data: transactions,
-        count: transactions.length
+        data: {
+          transactions,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
+        }
       });
 
     } catch (error) {
-      logError('Eşleşmeyen ödemeler getirme hatası:', error);
-      res.status(500).json({
+      logError('Eşleşmemiş ödemeler getirme hatası:', error);
+      return res.status(500).json({
         success: false,
-        error: 'Eşleşmeyen ödemeler getirilemedi'
+        error: 'Eşleşmemiş ödemeler getirilemedi'
       });
     }
   }
 
-  // Manuel eşleştirme
+  // Manuel ödeme eşleştirme
   async matchPayment(req: Request, res: Response) {
     try {
       const { transactionId, customerId } = req.body;
@@ -249,7 +280,7 @@ export class BankingController {
 
       // Transaction'ı getir
       const transaction = await prisma.bankTransaction.findUnique({
-        where: { id: Number(transactionId) }
+        where: { id: transactionId }
       });
       
       if (!transaction) {
@@ -261,7 +292,7 @@ export class BankingController {
 
       // Müşteriyi getir
       const customer = await prisma.customer.findUnique({
-        where: { id: Number(customerId) }
+        where: { id: customerId }
       });
       
       if (!customer) {
@@ -280,9 +311,9 @@ export class BankingController {
       };
 
       // Eşleştirmeyi kaydet
-      await this.matchingService.saveMatchResult(Number(transactionId), matchResult);
+      await this.matchingService.saveMatchResult(transactionId, matchResult);
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Eşleştirme başarıyla kaydedildi',
         data: {
@@ -294,7 +325,7 @@ export class BankingController {
 
     } catch (error) {
       logError('Manuel eşleştirme hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Manuel eşleştirme yapılamadı'
       });
@@ -311,14 +342,14 @@ export class BankingController {
         isConfigured: !!(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS)
       };
 
-      res.json({
+      return res.json({
         success: true,
         data: settings
       });
 
     } catch (error) {
       logError('Email ayarları getirme hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Email ayarları getirilemedi'
       });
@@ -330,7 +361,7 @@ export class BankingController {
     try {
       const isConnected = await this.emailService.testConnection();
       
-      res.json({
+      return res.json({
         success: true,
         data: {
           connected: isConnected
@@ -339,7 +370,7 @@ export class BankingController {
 
     } catch (error) {
       logError('Email bağlantı testi hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Email bağlantı testi yapılamadı'
       });
@@ -349,16 +380,27 @@ export class BankingController {
   // Eşleştirme istatistikleri
   async getMatchingStats(req: Request, res: Response) {
     try {
-      const stats = await this.matchingService.getMatchingStatistics();
-      
-      res.json({
+      const totalTransactions = await prisma.bankTransaction.count();
+      const matchedTransactions = await prisma.bankTransaction.count({
+        where: { isMatched: true }
+      });
+      const unmatchedTransactions = totalTransactions - matchedTransactions;
+
+      const stats = {
+        total: totalTransactions,
+        matched: matchedTransactions,
+        unmatched: unmatchedTransactions,
+        matchRate: totalTransactions > 0 ? (matchedTransactions / totalTransactions) * 100 : 0
+      };
+
+      return res.json({
         success: true,
         data: stats
       });
 
     } catch (error) {
       logError('Eşleştirme istatistikleri hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Eşleştirme istatistikleri getirilemedi'
       });
@@ -369,38 +411,57 @@ export class BankingController {
   async runAutoMatching(req: Request, res: Response) {
     try {
       const { limit = 100 } = req.query;
-      const limitNum = Number(limit);
+      const limitNum = parseInt(limit as string) || 100;
 
-      if (!Number.isInteger(limitNum) || limitNum <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Limit pozitif tamsayı olmalıdır'
-        });
-      }
+      // Eşleşmemiş işlemleri getir
+      const unmatchedTransactions = await prisma.bankTransaction.findMany({
+        where: { isMatched: false },
+        take: limitNum,
+        orderBy: { transactionDate: 'desc' }
+      });
 
-      const unmatchedTransactions = await this.matchingService.getUnmatchedTransactions(limitNum);
       let matchedCount = 0;
+      const results = [];
 
       for (const transaction of unmatchedTransactions) {
-        const matchResult = await this.matchingService.matchTransaction(transaction);
-        if (matchResult.matched) {
-          await this.matchingService.saveMatchResult(transaction.id, matchResult);
-          matchedCount++;
+        try {
+          const matchResult = await this.matchingService.matchTransaction(transaction);
+          
+          if (matchResult.matched) {
+            await this.matchingService.saveMatchResult(transaction.id, matchResult);
+            matchedCount++;
+          }
+
+          results.push({
+            transactionId: transaction.id,
+            matched: matchResult.matched,
+            confidence: matchResult.confidence,
+            customer: matchResult.customer?.name || null
+          });
+
+        } catch (error) {
+          logError(`İşlem eşleştirme hatası (${transaction.id}):`, error);
+          results.push({
+            transactionId: transaction.id,
+            matched: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
         }
       }
 
-      res.json({
+      return res.json({
         success: true,
         message: `${matchedCount} işlem eşleştirildi`,
         data: {
           processed: unmatchedTransactions.length,
-          matched: matchedCount
+          matched: matchedCount,
+          results
         }
       });
 
     } catch (error) {
       logError('Otomatik eşleştirme hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Otomatik eşleştirme çalıştırılamadı'
       });

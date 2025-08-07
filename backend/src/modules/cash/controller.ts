@@ -44,14 +44,14 @@ export class CashController {
         }
       });
 
-      res.json({
+      return res.json({
         success: true,
         cashFlow
       });
 
     } catch (error) {
       logError('Kasa akışı oluşturma hatası:', error);
-      res.status(500).json({ error: 'Kasa akışı oluşturulamadı' });
+      return res.status(500).json({ error: 'Kasa akışı oluşturulamadı' });
     }
   }
 
@@ -95,7 +95,7 @@ export class CashController {
 
       const total = await prisma.cashFlow.count({ where });
 
-      res.json({
+      return res.json({
         cashFlows,
         pagination: {
           page: pageNum,
@@ -106,65 +106,82 @@ export class CashController {
       });
 
     } catch (error) {
-      logError('Kasa akışları listesi hatası:', error);
-      res.status(500).json({ error: 'Kasa akışları alınamadı' });
+      logError('Kasa akışları getirme hatası:', error);
+      return res.status(500).json({ error: 'Kasa akışları getirilemedi' });
     }
   }
 
-  // Güncel kasa durumu
+  // Mevcut bakiye hesaplama
   async getCurrentBalance(req: Request, res: Response) {
     try {
       const userId = (req as any).user.id;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
 
-      // Bugünün kasa kaydı
-      const todayFlow = await prisma.cashFlow.findFirst({
-        where: {
-          userId,
-          date: today
-        }
-      });
-
-      // Son kasa kaydı
-      const lastFlow = await prisma.cashFlow.findFirst({
+      // En son kasa akışını bul
+      const lastCashFlow = await prisma.cashFlow.findFirst({
         where: { userId },
         orderBy: { date: 'desc' }
       });
 
-      // Bugünkü işlemler (kasa işlemleri)
-      const todayTransactions = await prisma.transaction.findMany({
-        where: {
-          userId,
-          date: {
-            gte: today
-          },
-          type: 'CASH' // Kasa işlemleri
+      if (!lastCashFlow) {
+        return res.json({
+          success: true,
+          data: {
+            currentBalance: 0,
+            lastUpdate: null,
+            message: 'Henüz kasa kaydı bulunmuyor'
+          }
+        });
+      }
+
+      // Bugünün tarihi
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const lastFlowDate = new Date(lastCashFlow.date);
+      lastFlowDate.setHours(0, 0, 0, 0);
+
+      let currentBalance = lastCashFlow.closingBalance;
+
+      // Eğer son kayıt bugün değilse, bugün için işlemler varsa hesapla
+      if (lastFlowDate.getTime() !== today.getTime()) {
+        // Bugünkü işlemleri topla
+        const todayTransactions = await prisma.transaction.findMany({
+          where: {
+            userId,
+            date: {
+              gte: today
+            }
+          }
+        });
+
+        const todayIncome = todayTransactions
+          .filter(t => t.type === 'INCOME')
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const todayExpense = todayTransactions
+          .filter(t => t.type === 'EXPENSE')
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        currentBalance = lastCashFlow.closingBalance + todayIncome - todayExpense;
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          currentBalance,
+          lastUpdate: lastCashFlow.date,
+          lastCashFlow: {
+            openingBalance: lastCashFlow.openingBalance,
+            closingBalance: lastCashFlow.closingBalance,
+            totalIncome: lastCashFlow.totalIncome,
+            totalExpense: lastCashFlow.totalExpense
+          }
         }
       });
 
-      const totalIncome = todayTransactions
-        .filter(t => t.amount > 0)
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const totalExpense = todayTransactions
-        .filter(t => t.amount < 0)
-        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-      const currentBalance = {
-        today: todayFlow?.closingBalance || 0,
-        lastRecord: lastFlow?.closingBalance || 0,
-        todayIncome: totalIncome,
-        todayExpense: totalExpense,
-        calculatedBalance: (todayFlow?.openingBalance || lastFlow?.closingBalance || 0) + totalIncome - totalExpense,
-        hasTodayRecord: !!todayFlow
-      };
-
-      res.json(currentBalance);
-
     } catch (error) {
-      logError('Kasa durumu hatası:', error);
-      res.status(500).json({ error: 'Kasa durumu alınamadı' });
+      logError('Mevcut bakiye hesaplama hatası:', error);
+      return res.status(500).json({ error: 'Mevcut bakiye hesaplanamadı' });
     }
   }
 
@@ -173,59 +190,74 @@ export class CashController {
     try {
       const userId = (req as any).user.id;
       const { actualAmount, notes } = req.body;
+
+      if (!actualAmount || isNaN(Number(actualAmount))) {
+        return res.status(400).json({
+          success: false,
+          error: 'Geçerli bir tutar gerekli'
+        });
+      }
+
+      // Mevcut bakiyeyi hesapla
+      const lastCashFlow = await prisma.cashFlow.findFirst({
+        where: { userId },
+        orderBy: { date: 'desc' }
+      });
+
+      const expectedBalance = lastCashFlow ? lastCashFlow.closingBalance : 0;
+      const actualBalance = Number(actualAmount);
+      const difference = actualBalance - expectedBalance;
+
+      // Bugün için kasa akışı oluştur
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Bugünün kasa kaydı
-      let todayFlow = await prisma.cashFlow.findFirst({
+      const existingFlow = await prisma.cashFlow.findFirst({
         where: {
           userId,
           date: today
         }
       });
 
-      if (!todayFlow) {
-        // Bugün için kayıt yoksa oluştur
-        const lastFlow = await prisma.cashFlow.findFirst({
-          where: { userId },
-          orderBy: { date: 'desc' }
-        });
-
-        todayFlow = await prisma.cashFlow.create({
+      if (existingFlow) {
+        // Mevcut kaydı güncelle
+        await prisma.cashFlow.update({
+          where: { id: existingFlow.id },
           data: {
-            userId,
-            date: today,
-            openingBalance: lastFlow?.closingBalance || 0,
-            closingBalance: Number(actualAmount),
-            totalIncome: 0,
-            totalExpense: 0,
-            difference: Number(actualAmount) - (lastFlow?.closingBalance || 0),
-            notes: `Kasa sayımı: ${notes || ''}`
+            closingBalance: actualBalance,
+            difference,
+            notes: notes || `Kasa sayımı: ${difference > 0 ? '+' : ''}${difference.toFixed(2)} TL`
           }
         });
       } else {
-        // Mevcut kaydı güncelle
-        const difference = Number(actualAmount) - todayFlow.closingBalance;
-        
-        todayFlow = await prisma.cashFlow.update({
-          where: { id: todayFlow.id },
+        // Yeni kayıt oluştur
+        await prisma.cashFlow.create({
           data: {
-            closingBalance: Number(actualAmount),
+            userId,
+            date: today,
+            openingBalance: expectedBalance,
+            closingBalance: actualBalance,
+            totalIncome: difference > 0 ? difference : 0,
+            totalExpense: difference < 0 ? Math.abs(difference) : 0,
             difference,
-            notes: `Kasa sayımı güncelleme: ${notes || ''}`
+            notes: notes || `Kasa sayımı: ${difference > 0 ? '+' : ''}${difference.toFixed(2)} TL`
           }
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
-        cashFlow: todayFlow,
-        difference: todayFlow.difference
+        data: {
+          expectedBalance,
+          actualBalance,
+          difference,
+          message: difference === 0 ? 'Kasa sayımı doğru' : `Fark: ${difference > 0 ? '+' : ''}${difference.toFixed(2)} TL`
+        }
       });
 
     } catch (error) {
       logError('Kasa sayımı hatası:', error);
-      res.status(500).json({ error: 'Kasa sayımı yapılamadı' });
+      return res.status(500).json({ error: 'Kasa sayımı yapılamadı' });
     }
   }
 
@@ -235,12 +267,17 @@ export class CashController {
       const userId = (req as any).user.id;
       const { startDate, endDate } = req.query;
 
-      const start = startDate ? new Date(startDate as string) : new Date();
-      const end = endDate ? new Date(endDate as string) : new Date();
-      
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          error: 'Başlangıç ve bitiş tarihi gerekli'
+        });
+      }
 
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      // Kasa akışları
       const cashFlows = await prisma.cashFlow.findMany({
         where: {
           userId,
@@ -252,106 +289,106 @@ export class CashController {
         orderBy: { date: 'asc' }
       });
 
+      // İşlemler
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          userId,
+          date: {
+            gte: start,
+            lte: end
+          }
+        },
+        include: {
+          category: true,
+          customer: true
+        },
+        orderBy: { date: 'desc' }
+      });
+
       // İstatistikler
-      const totalIncome = cashFlows.reduce((sum, flow) => sum + flow.totalIncome, 0);
-      const totalExpense = cashFlows.reduce((sum, flow) => sum + flow.totalExpense, 0);
-      const totalDifference = cashFlows.reduce((sum, flow) => sum + flow.difference, 0);
-      const averageDailyBalance = cashFlows.length > 0 
-        ? cashFlows.reduce((sum, flow) => sum + flow.closingBalance, 0) / cashFlows.length 
-        : 0;
+      const totalIncome = transactions
+        .filter(t => t.type === 'INCOME')
+        .reduce((sum, t) => sum + t.amount, 0);
 
-      // Günlük trend
-      const dailyTrend = cashFlows.map(flow => ({
-        date: flow.date,
-        openingBalance: flow.openingBalance,
-        closingBalance: flow.closingBalance,
-        totalIncome: flow.totalIncome,
-        totalExpense: flow.totalExpense,
-        difference: flow.difference
-      }));
+      const totalExpense = transactions
+        .filter(t => t.type === 'EXPENSE')
+        .reduce((sum, t) => sum + t.amount, 0);
 
-      const report = {
-        period: {
-          start: start,
-          end: end
-        },
-        summary: {
-          totalDays: cashFlows.length,
-          totalIncome,
-          totalExpense,
-          netCashFlow: totalIncome - totalExpense,
-          totalDifference,
-          averageDailyBalance
-        },
-        dailyTrend,
-        cashFlows
-      };
+      const netCashFlow = totalIncome - totalExpense;
 
-      res.json(report);
+      return res.json({
+        success: true,
+        data: {
+          period: { start, end },
+          summary: {
+            totalIncome,
+            totalExpense,
+            netCashFlow,
+            cashFlowCount: cashFlows.length,
+            transactionCount: transactions.length
+          },
+          cashFlows,
+          transactions
+        }
+      });
 
     } catch (error) {
       logError('Kasa raporu hatası:', error);
-      res.status(500).json({ error: 'Kasa raporu oluşturulamadı' });
+      return res.status(500).json({ error: 'Kasa raporu oluşturulamadı' });
     }
   }
 
-  // Kasa işlemi ekleme (nakit giriş/çıkış)
+  // Kasa işlemi ekleme
   async addCashTransaction(req: Request, res: Response) {
     try {
       const userId = (req as any).user.id;
-      const { amount, description, categoryId, date } = req.body;
+      const {
+        type,
+        amount,
+        description,
+        categoryId,
+        customerId,
+        date
+      } = req.body;
 
-      if (!amount || !description) {
-        return res.status(400).json({ error: 'Tutar ve açıklama gerekli' });
+      if (!type || !amount || !description) {
+        return res.status(400).json({
+          success: false,
+          error: 'Tip, tutar ve açıklama gerekli'
+        });
       }
 
-      // Kasa işlemi oluştur
+      if (!['INCOME', 'EXPENSE'].includes(type)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Geçersiz işlem tipi'
+        });
+      }
+
       const transaction = await prisma.transaction.create({
         data: {
           userId,
-          type: 'CASH',
+          type,
           amount: Number(amount),
           description,
           date: date ? new Date(date) : new Date(),
           categoryId: categoryId || null,
-          currency: 'TRY'
+          customerId: customerId || null
+        },
+        include: {
+          category: true,
+          customer: true
         }
       });
 
-      // Bugünün kasa kaydını güncelle
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      let todayFlow = await prisma.cashFlow.findFirst({
-        where: {
-          userId,
-          date: today
-        }
-      });
-
-      if (todayFlow) {
-        const newTotalIncome = Number(amount) > 0 ? todayFlow.totalIncome + Number(amount) : todayFlow.totalIncome;
-        const newTotalExpense = Number(amount) < 0 ? todayFlow.totalExpense + Math.abs(Number(amount)) : todayFlow.totalExpense;
-        const newClosingBalance = todayFlow.closingBalance + Number(amount);
-
-        await prisma.cashFlow.update({
-          where: { id: todayFlow.id },
-          data: {
-            totalIncome: newTotalIncome,
-            totalExpense: newTotalExpense,
-            closingBalance: newClosingBalance
-          }
-        });
-      }
-
-      res.json({
+      return res.json({
         success: true,
-        transaction
+        data: transaction
       });
 
     } catch (error) {
       logError('Kasa işlemi ekleme hatası:', error);
-      res.status(500).json({ error: 'Kasa işlemi eklenemedi' });
+      return res.status(500).json({ error: 'Kasa işlemi eklenemedi' });
     }
   }
 
@@ -359,7 +396,7 @@ export class CashController {
   async getCashTransactions(req: Request, res: Response) {
     try {
       const userId = (req as any).user.id;
-      const { page = 1, limit = 20, startDate, endDate } = req.query;
+      const { page = 1, limit = 20, type, startDate, endDate } = req.query;
       const pageNum = Number(page);
       const limitNum = Number(limit);
 
@@ -377,11 +414,9 @@ export class CashController {
 
       const skip = (pageNum - 1) * limitNum;
 
-      const where: any = {
-        userId,
-        type: 'CASH'
-      };
-
+      const where: any = { userId };
+      
+      if (type) where.type = type;
       if (startDate && endDate) {
         where.date = {
           gte: new Date(startDate as string),
@@ -392,7 +427,8 @@ export class CashController {
       const transactions = await prisma.transaction.findMany({
         where,
         include: {
-          category: true
+          category: true,
+          customer: true
         },
         orderBy: { date: 'desc' },
         skip,
@@ -401,19 +437,22 @@ export class CashController {
 
       const total = await prisma.transaction.count({ where });
 
-      res.json({
-        transactions,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          pages: Math.ceil(total / limitNum)
+      return res.json({
+        success: true,
+        data: {
+          transactions,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
         }
       });
 
     } catch (error) {
-      logError('Kasa işlemleri listesi hatası:', error);
-      res.status(500).json({ error: 'Kasa işlemleri alınamadı' });
+      logError('Kasa işlemleri getirme hatası:', error);
+      return res.status(500).json({ error: 'Kasa işlemleri getirilemedi' });
     }
   }
 } 

@@ -103,9 +103,8 @@ export class PaymentMatchingService {
   /**
    * Tutar deseni kontrolü
    */
-  async checkAmountPattern(transactionAmount: number, customerId: number): Promise<{ match: boolean; confidence: number; method: string }> {
+  async checkAmountPattern(transactionAmount: number, customerId: string): Promise<{ match: boolean; confidence: number; method: string }> {
     try {
-      // Son 30 günlük işlemleri al
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -204,7 +203,6 @@ export class PaymentMatchingService {
           name: true,
           originalName: true,
           nameVariations: true,
-          yapikrediIban: true,
           balance: true,
           lastPaymentDate: true,
           paymentPattern: true
@@ -284,12 +282,13 @@ export class PaymentMatchingService {
           matchMethods.push(amountMatch.method);
         }
         
-        // 5. IBAN eşleştirme kontrolü
-        const ibanMatch = this.checkIBANMatch(transaction.accountIban, customer.yapikrediIban);
-        if (ibanMatch.match) {
-          totalConfidence += ibanMatch.confidence * 0.2; // %20 ağırlık
-          matchMethods.push(ibanMatch.method);
-        }
+        // 5. IBAN eşleştirme kontrolü (eğer müşteride IBAN bilgisi varsa)
+        // Bu kısım şimdilik devre dışı çünkü schema'da IBAN field'ı yok
+        // const ibanMatch = this.checkIBANMatch(transaction.accountIban, customer.yapikrediIban);
+        // if (ibanMatch.match) {
+        //   totalConfidence += ibanMatch.confidence * 0.2; // %20 ağırlık
+        //   matchMethods.push(ibanMatch.method);
+        // }
         
         console.log(`    🎯 Toplam güven: ${(totalConfidence * 100).toFixed(1)}%`);
         
@@ -297,27 +296,19 @@ export class PaymentMatchingService {
         if (totalConfidence >= 0.7) {
           console.log(`    ✅ Eşleşme bulundu!`);
           matches.push({
-            customer: customer,
+            customer,
             confidence: totalConfidence,
-            methods: matchMethods,
-            details: {
-              nameMatch: nameMatch,
-              amountMatch: amountMatch,
-              ibanMatch: ibanMatch
-            }
+            methods: matchMethods
           });
-        } else {
-          console.log(`    ❌ Eşleşme skoru yetersiz (< 70%)`);
         }
       }
       
-      // En yüksek skorlu eşleşmeyi döndür
+      // En yüksek güvenilirlik skoruna sahip eşleşmeyi seç
       if (matches.length > 0) {
         matches.sort((a, b) => b.confidence - a.confidence);
         const bestMatch = matches[0];
         
-        console.log(`✅ Eşleşme bulundu: ${bestMatch.customer.name} (${(bestMatch.confidence * 100).toFixed(1)}%)`);
-        console.log(`   Yöntemler: ${bestMatch.methods.join(', ')}`);
+        console.log(`🎯 En iyi eşleşme: ${bestMatch.customer.name} (${(bestMatch.confidence * 100).toFixed(1)}%)`);
         
         return {
           matched: true,
@@ -328,13 +319,13 @@ export class PaymentMatchingService {
         };
       }
       
-      console.log(`❌ Eşleşme bulunamadı: ${transaction.counterpartyName}`);
+      console.log(`❌ Eşleşme bulunamadı`);
       return {
         matched: false,
         confidence: 0,
         methods: []
       };
-      
+
     } catch (error) {
       logError('❌ Eşleştirme hatası:', error);
       return {
@@ -349,7 +340,7 @@ export class PaymentMatchingService {
   /**
    * Eşleştirme sonucunu database'e kaydetme
    */
-  async saveMatchResult(transactionId: number, matchResult: any): Promise<boolean> {
+  async saveMatchResult(transactionId: string, matchResult: any): Promise<boolean> {
     try {
       if (!matchResult.matched) {
         // Eşleşme bulunamadı, sadece işlemi güncelle
@@ -368,7 +359,7 @@ export class PaymentMatchingService {
         data: {
           bankTransactionId: transactionId,
           customerId: matchResult.customer.id,
-          matchedAmount: matchResult.customer.balance || 0,
+          matchedAmount: matchResult.customer.balance?.amount || 0,
           confidenceScore: matchResult.confidence,
           matchMethod: matchResult.methods.join(', '),
           isConfirmed: false
@@ -389,12 +380,7 @@ export class PaymentMatchingService {
       await this.prisma.customer.update({
         where: { id: matchResult.customer.id },
         data: {
-          lastPaymentDate: new Date(),
-          balance: {
-            update: {
-              amount: (matchResult.customer.balance?.amount || 0) + matchResult.customer.balance
-            }
-          }
+          lastPaymentDate: new Date()
         }
       });
 
@@ -440,7 +426,7 @@ export class PaymentMatchingService {
   /**
    * Eşleştirmeyi onayla/reddet
    */
-  async confirmMatch(matchId: number, confirmed: boolean = true): Promise<boolean> {
+  async confirmMatch(matchId: string, confirmed: boolean = true): Promise<boolean> {
     try {
       const paymentMatch = await this.prisma.paymentMatch.update({
         where: { id: matchId },
@@ -453,15 +439,22 @@ export class PaymentMatchingService {
         }
       });
 
-      // BankTransaction'ı da güncelle
-      await this.prisma.bankTransaction.update({
-        where: { id: paymentMatch.bankTransactionId },
-        data: {
-          isMatched: confirmed
-        }
-      });
+      if (confirmed) {
+        // BankTransaction'ı da onayla
+        await this.prisma.bankTransaction.update({
+          where: { id: paymentMatch.bankTransactionId },
+          data: {
+            isMatched: true,
+            matchedCustomerId: paymentMatch.customerId,
+            confidenceScore: paymentMatch.confidenceScore
+          }
+        });
 
-      console.log(`✅ Eşleştirme ${confirmed ? 'onaylandı' : 'reddedildi'}: Match ID ${matchId}`);
+        console.log(`✅ Eşleştirme onaylandı: ${paymentMatch.customer.name}`);
+      } else {
+        console.log(`❌ Eşleştirme reddedildi: ${paymentMatch.customer.name}`);
+      }
+
       return true;
 
     } catch (error) {

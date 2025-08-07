@@ -89,7 +89,7 @@ export const login = async (req: Request, res: Response) => {
     // Kullanıcı bilgilerini döndür (şifre hariç)
     const { password: _, ...userWithoutPassword } = user;
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         user: userWithoutPassword,
@@ -99,7 +99,7 @@ export const login = async (req: Request, res: Response) => {
 
   } catch (error) {
     logError('Login error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Giriş yapılırken hata oluştu'
     });
@@ -162,7 +162,7 @@ export const register = async (req: Request, res: Response) => {
     // Token oluştur
     const token = generateToken(newUser.id);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: {
         user: newUser,
@@ -172,7 +172,7 @@ export const register = async (req: Request, res: Response) => {
 
   } catch (error) {
     logError('Register error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Kayıt olurken hata oluştu'
     });
@@ -204,11 +204,11 @@ export const getProfile = async (req: Request, res: Response) => {
       });
     }
 
-    res.json(user);
+    return res.json(user);
 
   } catch (error) {
     logError('Get profile error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Profil bilgileri alınırken hata oluştu'
     });
@@ -266,14 +266,14 @@ export const changePassword = async (req: Request, res: Response) => {
       data: { password: hashedNewPassword }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Şifre başarıyla değiştirildi'
     });
 
   } catch (error) {
     logError('Change password error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Şifre değiştirilirken hata oluştu'
     });

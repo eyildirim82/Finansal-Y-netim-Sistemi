@@ -557,7 +557,7 @@ export class ExtractController {
         }
 
         if (!currentCustomer) {
-          logError('Müşteri context kayboldu');
+          logError('Müşteri context kayboldu', new Error('Customer context lost'));
           errorRows++;
           i++;
           continue;
@@ -627,18 +627,19 @@ export class ExtractController {
     });
 
     if (!customer) {
+      const data: any = {
+        code: this.generateCustomerCode(header.name),
+        name: header.name,
+        originalName: header.name,
+        phone: header.phone,
+        address: header.address,
+        accountType: header.accountType,
+        tag1: header.tag1,
+        tag2: header.tag2
+      };
+      if (userId) data.userId = userId;
       customer = await prisma.customer.create({
-        data: {
-          code: this.generateCustomerCode(header.name),
-          name: header.name,
-          originalName: header.name,
-          phone: header.phone,
-          address: header.address,
-          accountType: header.accountType,
-          tag1: header.tag1,
-          tag2: header.tag2,
-          userId: userId
-        }
+        data
       });
     }
 

@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const controller_1 = require("./controller");
+const router = (0, express_1.Router)();
+const controller = new controller_1.BankingController();
+router.post('/fetch-emails', controller.fetchEmails.bind(controller));
+router.post('/process-email', controller.processEmail.bind(controller));
+router.get('/transactions', controller.getBankTransactions.bind(controller));
+router.get('/unmatched', controller.getUnmatchedPayments.bind(controller));
+router.post('/match', controller.matchPayment.bind(controller));
+router.get('/email-settings', controller.getEmailSettings.bind(controller));
+router.post('/test-connection', controller.testEmailConnection.bind(controller));
+router.get('/matching-stats', controller.getMatchingStats.bind(controller));
+router.post('/run-auto-matching', controller.runAutoMatching.bind(controller));
+exports.default = router;
+//# sourceMappingURL=routes.js.map

@@ -1,6 +1,8 @@
 import { logError } from '@/shared/logger';
 import { ImapFlow } from 'imapflow';
+// @ts-ignore
 import { simpleParser } from 'mailparser';
+// @ts-ignore
 import { decodeWords } from 'libmime';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -54,12 +56,12 @@ export class YapiKrediFASTEmailService {
 
     // Tüm email credential'ları environment variable'dan alınır
     const cfg = {
-      host: process.env.EMAIL_HOST, // Örn: 'imap.yapikredi.com.tr'
+      host: process.env.EMAIL_HOST!, // Örn: 'imap.yapikredi.com.tr'
       port: +(process.env.EMAIL_PORT || '993'), // Örn: 993
       secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.EMAIL_USER!,
+        pass: process.env.EMAIL_PASS!
       }
     };
 
@@ -120,7 +122,7 @@ export class YapiKrediFASTEmailService {
           source: true,
           envelope: true,
           bodyStructure: true,
-          bodyPart: ['']
+          bodyParts: ['']
         });
 
         for await (const email of emails) {
@@ -163,35 +165,34 @@ export class YapiKrediFASTEmailService {
   async processBatchWithConcurrency(batch: any[], concurrencyLimit: number): Promise<any[]> {
     const results: any[] = [];
     const queue = [...batch];
-    const active = new Set();
+    const running: Promise<void>[] = [];
 
     const processNext = async (): Promise<void> => {
       if (queue.length === 0) return;
 
       const item = queue.shift()!;
-      const promise = this.processEmailItem(item);
-      active.add(promise);
-
       try {
-        const result = await promise;
-        results.push(result);
-      } finally {
-        active.delete(promise);
+        const result = await this.processEmailItem(item);
+        if (result) results.push(result);
+      } catch (error) {
+        logError('Batch processing error:', error);
       }
 
-      if (queue.length > 0) {
-        await processNext();
-      }
+      // Recursively process next item
+      await processNext();
     };
 
-    const workers = Array(concurrencyLimit).fill(null).map(() => processNext());
-    await Promise.all(workers);
+    // Start concurrent processing
+    for (let i = 0; i < Math.min(concurrencyLimit, batch.length); i++) {
+      running.push(processNext());
+    }
 
+    await Promise.all(running);
     return results;
   }
 
   private async processEmailItem(item: any): Promise<any> {
-    // Email işleme mantığı
+    // Implementation for processing individual email items
     return item;
   }
 
@@ -211,32 +212,43 @@ export class YapiKrediFASTEmailService {
     };
   }
 
-  async parseYapiKrediFASTEmail(mail: any): Promise<any> {
-    const sourceContent = mail.html || mail.text || '';
-    const body = this.cleanHtml(sourceContent);
+  /* ───────────────────────── PARSING ───────────────────────── */
 
-    // İşlem tipi tespiti ve uygun regex ile parse
-    let match: any = null;
-    let type: string | null = null;
-    
-    if ((match = body.match(this.patterns.fast))) {
-      type = 'FAST';
-    } else if ((match = body.match(this.patterns.havale))) {
-      type = 'HAVALE';
-    } else if ((match = body.match(this.patterns.eft))) {
-      type = 'EFT';
+  async parseYapiKrediFASTEmail(mail: any): Promise<any> {
+    if (!mail || !mail.text) {
+      logError('Invalid email data:', mail);
+      return null;
+    }
+
+    const body = this.cleanHtml(mail.text);
+    let match = null;
+    let type = '';
+
+    // FAST pattern'i dene
+    match = body.match(this.patterns.fast);
+    if (match) type = 'FAST';
+
+    // HAVALE pattern'i dene
+    if (!match) {
+      match = body.match(this.patterns.havale);
+      if (match) type = 'HAVALE';
+    }
+
+    // EFT pattern'i dene
+    if (!match) {
+      match = body.match(this.patterns.eft);
+      if (match) type = 'EFT';
     }
 
     if (!match) {
-      console.warn(`Yapı Kredi FAST/EFT/HAVALE format değişikliği veya tanınmayan e-posta: subject=${mail.subject}`);
-      // Parse edilemeyen e-postayı logs/failed-fast-emails.log dosyasına ekle
       const failObj = {
         date: new Date().toISOString(),
         subject: mail.subject,
-        messageId: mail.messageId,
         from: mail.from,
-        body: body.substring(0, 1000) // ilk 1000 karakteri kaydet
+        body: body.substring(0, 200) + '...',
+        error: 'Pattern match failed'
       };
+
       try {
         fs.appendFileSync(this.failedLogPath, JSON.stringify(failObj) + '\n', 'utf8');
       } catch (err) {
@@ -246,18 +258,18 @@ export class YapiKrediFASTEmailService {
     }
 
     const bal = body.match(this.patterns.balance);
-    const balanceAfter = bal ? this.parseAmount(bal.groups.bal) : null;
+    const balanceAfter = bal && bal.groups ? this.parseAmount(bal.groups.bal) : null;
 
     return {
       messageId: mail.messageId,
       bankCode: 'YAPIKREDI',
       source: 'email',
       direction: this.detectDirection(mail, body),
-      accountIban: match.groups.iban,
-      maskedAccount: match.groups.mask,
-      transactionDate: this.parseDate(match.groups.dt) || mail.date || new Date(),
-      amount: this.parseAmount(match.groups.amt),
-      counterpartyName: match.groups.party.trim(),
+      accountIban: match.groups?.iban || '',
+      maskedAccount: match.groups?.mask || '',
+      transactionDate: this.parseDate(match.groups?.dt || '') || mail.date || new Date(),
+      amount: this.parseAmount(match.groups?.amt || '0'),
+      counterpartyName: match.groups?.party?.trim() || '',
       balanceAfter,
       rawEmailData: JSON.stringify({
         subject: mail.subject,
@@ -339,32 +351,34 @@ export class YapiKrediFASTEmailService {
       await this.imap!.mailboxOpen('INBOX');
       
       // IDLE mode başlat
-      const idle = this.imap!.idle();
+      const idle = await this.imap!.idle();
       
-      idle.on('message', async (msg) => {
-        try {
-          const lock = await this.imap!.getMailboxLock('INBOX');
+      if (idle && typeof idle === 'object' && 'on' in idle) {
+        (idle as any).on('message', async (msg: any) => {
           try {
-            const email = await this.imap!.fetchOne(msg.uid, {
-              source: true,
-              envelope: true
-            });
-            
-            if (email) {
-              const parsed = await simpleParser(email.source);
-              const transaction = await this.parseYapiKrediFASTEmail(parsed);
+            const lock = await this.imap!.getMailboxLock('INBOX');
+            try {
+              const email = await this.imap!.fetchOne(msg.uid, {
+                source: true,
+                envelope: true
+              });
               
-              if (transaction) {
-                callback(transaction);
+              if (email) {
+                const parsed = await simpleParser(email.source);
+                const transaction = await this.parseYapiKrediFASTEmail(parsed);
+                
+                if (transaction) {
+                  callback(transaction);
+                }
               }
+            } finally {
+              lock.release();
             }
-          } finally {
-            lock.release();
+          } catch (err) {
+            logError('Realtime email processing error:', err);
           }
-        } catch (err) {
-          logError('Realtime email processing error:', err);
-        }
-      });
+        });
+      }
 
       console.log('🔄 Realtime email monitoring başlatıldı');
       

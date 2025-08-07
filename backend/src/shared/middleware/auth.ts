@@ -56,7 +56,7 @@ export const authMiddleware = async (
 
     // Kullanıcıyı request'e ekle
     req.user = user;
-    next();
+    return next();
 
   } catch (error) {
     logError('Auth middleware error:', error);
@@ -94,7 +94,7 @@ export const adminMiddleware = (
       error: 'Admin yetkisi gerekli'
     });
   }
-  next();
+  return next();
 };
 
 // Rol tabanlı yetkilendirme
@@ -106,6 +106,6 @@ export const roleMiddleware = (allowedRoles: string[]) => {
         error: 'Bu işlem için yetkiniz yok'
       });
     }
-    next();
+    return next();
   };
 }; 

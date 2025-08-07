@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+export type CustomerSortField = 'name' | 'phone' | 'address' | 'type';
 export declare class CustomerController {
     static getAllCustomers(req: Request, res: Response): Promise<Response>;
     static getCustomer(req: Request, res: Response): Promise<Response>;

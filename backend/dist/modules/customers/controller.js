@@ -6,11 +6,19 @@ const client_1 = require("@prisma/client");
 const express_validator_1 = require("express-validator");
 const i18n_1 = require("../../utils/i18n");
 const uuid_1 = require("uuid");
+const ALLOWED_SORT_FIELDS = ['name', 'phone', 'address', 'type'];
 const prisma = new client_1.PrismaClient();
 class CustomerController {
     static async getAllCustomers(req, res) {
         try {
             const { page = 1, limit = 10, type, search, sortBy = 'name', sortOrder = 'asc' } = req.query;
+            const sortField = sortBy;
+            if (!ALLOWED_SORT_FIELDS.includes(sortField)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Ge\u00e7erli bir s\u0131ralama alan\u0131 giriniz'
+                });
+            }
             const userId = req.user.id;
             const pageNum = Number(page);
             const limitNum = Number(limit);
@@ -37,20 +45,8 @@ class CustomerController {
                     { address: { contains: search } }
                 ];
             }
-            const orderBy = (() => {
-                const order = sortOrder;
-                switch (sortBy) {
-                    case 'phone':
-                        return { phone: order };
-                    case 'createdAt':
-                        return { createdAt: order };
-                    case 'updatedAt':
-                        return { updatedAt: order };
-                    case 'name':
-                    default:
-                        return { name: order };
-                }
-            })();
+            const orderBy = {};
+            orderBy[sortField] = sortOrder;
             const total = await prisma.customer.count({ where });
             const customers = (await prisma.customer.findMany({
                 where,

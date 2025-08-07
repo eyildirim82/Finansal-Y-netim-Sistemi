@@ -64,7 +64,7 @@ const queryValidation = [
         .withMessage('Arama terimi 1-100 karakter arasında olmalıdır'),
     (0, express_validator_1.query)('sortBy')
         .optional()
-        .isIn(['name', 'email', 'phone', 'createdAt', 'updatedAt'])
+        .isIn(['name', 'phone', 'address', 'type'])
         .withMessage('Geçerli bir sıralama alanı giriniz'),
     (0, express_validator_1.query)('sortOrder')
         .optional()

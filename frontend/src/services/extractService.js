@@ -12,11 +12,22 @@ const extractService = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  getExtractDetail: async (id) => {
-    const res = await apiClient.get(`/extracts/${id}`);
-    return res.data;
+  // Ekstre detayını getir
+  async getExtractDetail(id) {
+    return apiClient.get(`/extracts/${id}`);
   },
-  // Diğer işlemler: doğrulama vs. eklenebilir
+
+  // Eski ekstreleri sil
+  async deleteOldExtracts(beforeDate = null, deleteAll = false) {
+    return apiClient.delete('/extracts/delete-old', {
+      data: { beforeDate, deleteAll }
+    });
+  },
+
+  // Belirli bir ekstreyi sil
+  async deleteExtract(id) {
+    return apiClient.delete(`/extracts/${id}`);
+  }
 };
 
 export default extractService;

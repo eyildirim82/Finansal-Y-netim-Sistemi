@@ -1,4 +1,4 @@
-import { logError } from '@/shared/logger';
+import { logError } from '../../shared/logger';
 import { ImapFlow } from 'imapflow';
 // @ts-ignore
 import { simpleParser } from 'mailparser';

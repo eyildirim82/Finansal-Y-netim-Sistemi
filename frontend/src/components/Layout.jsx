@@ -12,7 +12,9 @@ import {
   X,
   LogOut,
   User,
-  Settings
+  Settings,
+  FileText,
+  CheckCircle
 } from 'lucide-react'
 
 const Layout = () => {
@@ -22,15 +24,16 @@ const Layout = () => {
   const navigate = useNavigate()
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'İşlemler', href: '/transactions', icon: CreditCard },
+    { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Müşteriler', href: '/customers', icon: Users },
-    { name: 'Kategoriler', href: '/categories', icon: Tag },
+    { name: 'İşlemler', href: '/transactions', icon: FileText },
+    { name: 'Kategoriler', href: '/categories', icon: BarChart3 },
+    { name: 'Ekstreler', href: '/extracts', icon: Upload },
     { name: 'Raporlar', href: '/reports', icon: BarChart3 },
-    { name: 'Import', href: '/import', icon: Upload },
-    { name: 'Ekstre', href: '/extracts', icon: Upload },
+    { name: 'Ödenmemiş Faturalar', href: '/unpaid-invoices', icon: FileText },
+    { name: 'Ödenmiş Faturalar', href: '/paid-invoices', icon: CheckCircle },
+    { name: 'Kasa', href: '/cash', icon: CreditCard },
     { name: 'Banka', href: '/banking', icon: CreditCard },
-    { name: 'Kasa', href: '/cash', icon: Home },
   ]
 
   const handleLogout = () => {

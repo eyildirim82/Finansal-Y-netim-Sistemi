@@ -26,8 +26,13 @@ const customerValidation = [
     .isLength({ max: 500 })
     .withMessage('Adres 500 karakterden az olmalıdır'),
   body('type')
+    .optional()
     .isIn(['INDIVIDUAL', 'COMPANY'])
     .withMessage('Müşteri türü INDIVIDUAL veya COMPANY olmalıdır'),
+  body('accountType')
+    .optional()
+    .isIn(['CASH', 'CREDIT', 'FACTORING'])
+    .withMessage('Hesap türü CASH, CREDIT veya FACTORING olmalıdır'),
   body('taxNumber')
     .optional()
     .trim()
@@ -37,12 +42,16 @@ const customerValidation = [
     .optional()
     .trim()
     .isLength({ max: 1000 })
-    .withMessage('Notlar 1000 karakterden az olmalıdır')
+    .withMessage('Notlar 1000 karakterden az olmalıdır'),
+                body('dueDays')
+                .optional()
+                .isInt({ min: 1, max: 365 })
+                .withMessage('Vade günü 1-365 arasında olmalıdır')
 ];
 
 const updateCustomerValidation = [
   param('id')
-    .isInt({ min: 1 })
+    .isString()
     .withMessage('Geçerli bir müşteri ID giriniz'),
   ...customerValidation
 ];
@@ -90,27 +99,6 @@ router.get('/search', authMiddleware, [
     .withMessage('Limit 1-50 arasında olmalıdır')
 ], CustomerController.searchCustomers);
 
-// Tek müşteri getir
-router.get('/:id', authMiddleware, [
-  param('id').isInt({ min: 1 }).withMessage('Geçerli bir müşteri ID giriniz')
-], CustomerController.getCustomer);
-
-// Müşteri istatistikleri
-router.get('/:customerId/stats', authMiddleware, [
-  param('customerId').isInt({ min: 1 }).withMessage('Geçerli bir müşteri ID giriniz')
-], CustomerController.getCustomerStats);
-
-// Yeni müşteri oluştur
-router.post('/', authMiddleware, customerValidation, CustomerController.createCustomer);
-
-// Müşteri güncelle
-router.put('/:id', authMiddleware, updateCustomerValidation, CustomerController.updateCustomer);
-
-// Müşteri sil
-router.delete('/:id', authMiddleware, [
-  param('id').isInt({ min: 1 }).withMessage('Geçerli bir müşteri ID giriniz')
-], CustomerController.deleteCustomer);
-
 // Toplu müşteri silme (sadece admin)
 router.delete('/bulk/delete', authMiddleware, roleMiddleware(['ADMIN']), [
   body('ids')
@@ -120,5 +108,40 @@ router.delete('/bulk/delete', authMiddleware, roleMiddleware(['ADMIN']), [
     .isInt({ min: 1 })
     .withMessage('Geçerli ID\'ler giriniz')
 ], CustomerController.deleteMultipleCustomers);
+
+// Eski müşterileri silme (sadece admin)
+router.delete('/delete-old', authMiddleware, roleMiddleware(['ADMIN']), CustomerController.deleteOldCustomers);
+
+// Yeni müşteri oluştur
+router.post('/', authMiddleware, customerValidation, CustomerController.createCustomer);
+
+// Müşteri güncelle
+router.put('/:id', authMiddleware, updateCustomerValidation, CustomerController.updateCustomer);
+
+// Vade günü güncelle (sadece dueDays alanı için)
+router.patch('/:id/due-days', authMiddleware, [
+  param('id')
+    .isString()
+    .withMessage('Geçerli bir müşteri ID giriniz'),
+  body('dueDays')
+    .optional()
+    .isInt({ min: 1, max: 365 })
+    .withMessage('Vade günü 1-365 arasında olmalıdır')
+], CustomerController.updateCustomerDueDays);
+
+// Müşteri sil
+router.delete('/:id', authMiddleware, [
+  param('id').isString().withMessage('Geçerli bir müşteri ID giriniz')
+], CustomerController.deleteCustomer);
+
+// Tek müşteri getir
+router.get('/:id', authMiddleware, [
+  param('id').isString().withMessage('Geçerli bir müşteri ID giriniz')
+], CustomerController.getCustomer);
+
+// Müşteri istatistikleri
+router.get('/:customerId/stats', authMiddleware, [
+  param('customerId').isString().withMessage('Geçerli bir müşteri ID giriniz')
+], CustomerController.getCustomerStats);
 
 export default router; 

@@ -1,4 +1,4 @@
-import { logError } from '@/shared/logger';
+import { logError } from '../../shared/logger';
 import { PrismaClient } from '@prisma/client';
 
 /**
@@ -196,7 +196,13 @@ export class PaymentMatchingService {
     try {
       const customers = await this.prisma.customer.findMany({
         where: {
-          isActive: true
+          isActive: true,
+          // FAKTORİNG müşterilerini hariç tut
+          name: {
+            not: {
+              contains: 'FAKTORİNG'
+            }
+          }
         },
         select: {
           id: true,

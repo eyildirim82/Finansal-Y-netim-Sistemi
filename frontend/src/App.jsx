@@ -5,8 +5,11 @@ import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
 import Customers from './pages/Customers'
+import CustomerDetail from './pages/CustomerDetail'
 import Categories from './pages/Categories'
 import Reports from './pages/Reports'
+import UnpaidInvoices from './pages/UnpaidInvoices'
+import PaidInvoices from './pages/PaidInvoices'
 import Import from './pages/Import'
 import Extracts from './pages/Extracts'
 import Banking from './pages/Banking'
@@ -50,15 +53,19 @@ const AppContent = () => {
         </ProtectedRoute>
       }>
         <Route index element={<Dashboard />} />
-        <Route path="transactions" element={<Transactions />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="customers/:id" element={<CustomerDetail />} />
+        <Route path="transactions" element={<Transactions />} />
         <Route path="categories" element={<Categories />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="import" element={<Import />} />
         <Route path="extracts" element={<Extracts />} />
         <Route path="extracts/:id" element={<ExtractDetail />} />
-        <Route path="banking" element={<Banking />} />
+        <Route path="import" element={<Import />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="unpaid-invoices" element={<UnpaidInvoices />} />
+        <Route path="paid-invoices" element={<PaidInvoices />} />
         <Route path="cash" element={<Cash />} />
+        <Route path="banking" element={<Banking />} />
       </Route>
       
       {/* Catch all */}

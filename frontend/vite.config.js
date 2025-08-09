@@ -17,7 +17,15 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Authorization header'ını doğru şekilde ilet
+            if (req.headers.authorization) {
+              proxyReq.setHeader('Authorization', req.headers.authorization)
+            }
+          })
+        }
       }
     }
   },

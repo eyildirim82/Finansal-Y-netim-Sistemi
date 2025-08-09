@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CashController = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 class CashController {

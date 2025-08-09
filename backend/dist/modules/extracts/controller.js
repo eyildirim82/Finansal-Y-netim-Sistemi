@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExtractController = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const client_1 = require("@prisma/client");
 const ExcelJS = __importStar(require("exceljs"));
 const fs = __importStar(require("fs"));
@@ -310,70 +310,123 @@ function readCustomerHeader(ws, startRow) {
     let reportedTotalCredit = 0;
     let reportedDebtBalance = 0;
     let reportedCreditBalance = 0;
-    const maxSearchRows = Math.min(startRow + 15, ws.rowCount);
-    const maxSearchCols = 8;
-    for (let r = startRow; r <= maxSearchRows; r++) {
-        try {
-            const row = ws.getRow(r);
-            if (!row || row.cellCount === 0)
-                continue;
-            for (let c = 1; c <= maxSearchCols; c++) {
-                try {
-                    const cellVal = getText(row, c);
-                    const rightVal = getText(row, c + 1);
-                    if (!cellVal)
-                        continue;
-                    const cellNorm = norm(cellVal);
-                    if (cellNorm.includes('cari') && cellNorm.includes('kod') && !code) {
-                        code = rightVal;
-                    }
-                    else if ((cellNorm.includes('cari') && cellNorm.includes('ad')) ||
-                        (cellNorm.includes('müşteri') && cellNorm.includes('ad')) && !name) {
-                        name = rightVal;
-                    }
-                    else if (cellNorm.includes('telefon') && !phone) {
-                        phone = rightVal;
-                    }
-                    else if (cellNorm.includes('adres') && !address) {
-                        address = rightVal;
-                    }
-                    else if (cellNorm.includes('hesap') && cellNorm.includes('tür') && !accountType) {
-                        accountType = rightVal;
-                    }
-                    else if (cellNorm.includes('özel') && cellNorm.includes('kod') && cellNorm.includes('1') && !tag1) {
-                        tag1 = rightVal;
-                    }
-                    else if (cellNorm.includes('özel') && cellNorm.includes('kod') && cellNorm.includes('2') && !tag2) {
-                        tag2 = rightVal;
-                    }
-                    else if (cellNorm.includes('borç') && !cellNorm.includes('bakiye') && reportedTotalDebit === 0) {
-                        reportedTotalDebit = parseTL(rightVal);
-                    }
-                    else if (cellNorm.includes('alacak') && !cellNorm.includes('bakiye') && reportedTotalCredit === 0) {
-                        reportedTotalCredit = parseTL(rightVal);
-                    }
-                    else if (cellNorm.includes('borç') && cellNorm.includes('bakiye') && reportedDebtBalance === 0) {
-                        reportedDebtBalance = parseTL(rightVal);
-                    }
-                    else if (cellNorm.includes('alacak') && cellNorm.includes('bakiye') && reportedCreditBalance === 0) {
-                        reportedCreditBalance = parseTL(rightVal);
-                    }
-                }
-                catch (cellError) {
-                    if (process.env.DEBUG_IMPORT === '1') {
-                        console.warn(`Cell processing error at row ${r}, col ${c}:`, cellError.message);
-                    }
+    const maxSearchRows = Math.min(startRow + 20, ws.rowCount);
+    const maxSearchCols = 10;
+    const findFieldValue = (searchPatterns, excludePatterns = []) => {
+        for (let r = startRow; r <= maxSearchRows; r++) {
+            try {
+                const row = ws.getRow(r);
+                if (!row || row.cellCount === 0)
                     continue;
+                for (let c = 1; c <= maxSearchCols; c++) {
+                    try {
+                        const cellVal = getText(row, c);
+                        if (!cellVal)
+                            continue;
+                        const cellNorm = norm(cellVal);
+                        const matchesPattern = searchPatterns.some(pattern => cellNorm.includes(pattern));
+                        const excludedByPattern = excludePatterns.some(pattern => cellNorm.includes(pattern));
+                        if (matchesPattern && !excludedByPattern) {
+                            if (searchPatterns.some(pattern => pattern.includes('telefon') || pattern.includes('tel') || pattern.includes('gsm') || pattern.includes('cep'))) {
+                                const rightVal = getText(row, c + 1);
+                                if (rightVal && rightVal.trim() && validatePhone(rightVal)) {
+                                    return rightVal.trim();
+                                }
+                                for (let searchCol = 1; searchCol <= Math.min(20, ws.columnCount); searchCol++) {
+                                    if (searchCol === c || searchCol === c + 1)
+                                        continue;
+                                    const searchVal = getText(row, searchCol);
+                                    if (searchVal && validatePhone(searchVal)) {
+                                        return searchVal.trim();
+                                    }
+                                }
+                            }
+                            else {
+                                const rightVal = getText(row, c + 1);
+                                if (rightVal && rightVal.trim()) {
+                                    return rightVal.trim();
+                                }
+                            }
+                        }
+                    }
+                    catch (cellError) {
+                        if (process.env.DEBUG_IMPORT === '1') {
+                            console.warn(`Cell processing error at row ${r}, col ${c}:`, cellError.message);
+                        }
+                        continue;
+                    }
                 }
             }
-        }
-        catch (rowError) {
-            if (process.env.DEBUG_IMPORT === '1') {
-                console.warn(`Row processing error at row ${r}:`, rowError.message);
+            catch (rowError) {
+                if (process.env.DEBUG_IMPORT === '1') {
+                    console.warn(`Row processing error at row ${r}:`, rowError.message);
+                }
+                continue;
             }
-            continue;
         }
-    }
+        return '';
+    };
+    const validatePhone = (phoneValue) => {
+        if (!phoneValue || phoneValue === 'Telefon' || phoneValue.length < 5) {
+            return null;
+        }
+        const phoneRegex = /^[\d\s\-\+\(\)\.]+$/;
+        if (!phoneRegex.test(phoneValue)) {
+            return null;
+        }
+        const digitCount = phoneValue.replace(/\D/g, '').length;
+        if (digitCount < 10 || digitCount > 15) {
+            return null;
+        }
+        const cleanPhone = phoneValue.replace(/\D/g, '');
+        if (cleanPhone.startsWith('90') && cleanPhone.length === 12) {
+            return phoneValue.trim();
+        }
+        if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+            return phoneValue.trim();
+        }
+        if (cleanPhone.length >= 10 && cleanPhone.length <= 11) {
+            return phoneValue.trim();
+        }
+        return phoneValue.trim();
+    };
+    const determineCustomerType = (customerName) => {
+        if (!customerName)
+            return 'INDIVIDUAL';
+        const nameUpper = customerName.toUpperCase();
+        const companyKeywords = [
+            'A.Ş.', 'ANONİM ŞİRKETİ', 'LTD.ŞTİ.', 'LİMİTED ŞİRKETİ',
+            'SAN.', 'SANAYİ', 'TİC.', 'TİCARET', 'ŞİRKETİ', 'ŞTİ.',
+            'A.Ş', 'LTD', 'LİMİTED', 'SAN', 'TİC', 'KOOPERATİFİ',
+            'VAPFI', 'VAKFI', 'DERNEĞİ', 'BİRLİĞİ', 'ODASI',
+            'FEDERASYONU', 'KONFEDERASYONU', 'SENDİKASI'
+        ];
+        const individualKeywords = [
+            'KİŞİSEL', 'BİREYSEL', 'ŞAHIS', 'KİŞİ', 'BİREY'
+        ];
+        if (individualKeywords.some(keyword => nameUpper.includes(keyword))) {
+            return 'INDIVIDUAL';
+        }
+        if (companyKeywords.some(keyword => nameUpper.includes(keyword))) {
+            return 'CORPORATE';
+        }
+        if (customerName.length > 50) {
+            return 'CORPORATE';
+        }
+        return 'INDIVIDUAL';
+    };
+    code = findFieldValue(['cari kod', 'hesap kod', 'müşteri kod']);
+    name = findFieldValue(['cari ad', 'müşteri ad', 'hesap ad', 'firma ad']);
+    const phoneValue = findFieldValue(['telefon', 'tel', 'gsm', 'cep']);
+    phone = validatePhone(phoneValue);
+    address = findFieldValue(['adres', 'adres bilgisi']);
+    accountType = findFieldValue(['hesap tür', 'hesap tipi', 'müşteri tipi']);
+    tag1 = findFieldValue(['özel kod(1)', 'özel kod 1', 'tag1', 'etiket1']);
+    tag2 = findFieldValue(['özel kod(2)', 'özel kod 2', 'tag2', 'etiket2']);
+    reportedTotalDebit = parseTL(findFieldValue(['borç'], ['bakiye']));
+    reportedTotalCredit = parseTL(findFieldValue(['alacak'], ['bakiye']));
+    reportedDebtBalance = parseTL(findFieldValue(['borç bakiye', 'borç bakiyesi']));
+    reportedCreditBalance = parseTL(findFieldValue(['alacak bakiye', 'alacak bakiyesi']));
     let nextRow = startRow + 1;
     let headerSearchLimit = 50;
     let searchCount = 0;
@@ -395,15 +448,22 @@ function readCustomerHeader(ws, startRow) {
     if (!name && !code) {
         console.warn(`Warning: No customer name or code found starting from row ${startRow}`);
     }
+    const customerType = determineCustomerType(name);
+    if (process.env.DEBUG_IMPORT === '1') {
+        console.log(`[DEBUG] Customer header parsed:`, {
+            name, code, phone, address, accountType, customerType
+        });
+    }
     return {
         header: {
             code: code || `AUTO_${Date.now()}`,
             name: name || 'Bilinmeyen Müşteri',
-            phone,
-            address,
-            accountType,
-            tag1,
-            tag2,
+            phone: phone || null,
+            address: address || null,
+            accountType: accountType || null,
+            tag1: tag1 || null,
+            tag2: tag2 || null,
+            type: customerType,
             reportedTotalDebit,
             reportedTotalCredit,
             reportedDebtBalance,
@@ -423,11 +483,22 @@ function parseTxRow(row, map) {
         if (v instanceof Date)
             tarihStr = `${String(v.getDate()).padStart(2, '0')}/${String(v.getMonth() + 1).padStart(2, '0')}/${v.getFullYear()}`;
     }
+    let description = t('Açıklama');
+    if (!description || description.trim() === '') {
+        const possibleDescCols = [5, 6, 7, 8, 9, 10];
+        for (const col of possibleDescCols) {
+            const val = getText(row, col);
+            if (val && val.trim() !== '' && !isTL(val)) {
+                description = val;
+                break;
+            }
+        }
+    }
     return {
         docType: t('Belge Türü') || undefined,
         txnDate: parseDate(tarihStr),
         voucherNo: t('Evrak No') || undefined,
-        description: t('Açıklama') || undefined,
+        description: description || undefined,
         dueDate: dateOrNull(t('Vade Tarihi')),
         amountBase: n('Matrah'),
         discount: n('iskonto'),
@@ -454,6 +525,7 @@ class ExtractController {
                 return res.status(400).json({ error: 'Dosya yüklenmedi' });
             }
             const userId = req.user.id;
+            console.log('[DEBUG] Ekstre yükleyen userId:', userId);
             const filePath = req.file.path;
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.readFile(filePath);
@@ -517,6 +589,11 @@ class ExtractController {
                         console.log(`[DEBUG] Müşteri header:`, header);
                         i = nextRow;
                         const customer = await this.findOrCreateCustomer(header, userId);
+                        if (!customer) {
+                            console.log(`[DEBUG] FAKTORİNG müşterisi atlandı, yeni müşteri aranıyor`);
+                            i++;
+                            continue;
+                        }
                         currentCustomer = customer;
                         customers.add(customer.name);
                         console.log(`[DEBUG] Müşteri oluşturuldu/bulundu: ${customer.name}`);
@@ -606,8 +683,15 @@ class ExtractController {
         }
         if (batch.length > 0) {
             try {
-                await prisma.extractTransaction.createMany({ data: batch });
-                console.log(`[DEBUG] Batch insert tamamlandı. Toplam: ${batch.length}`);
+                const newTransactions = await this.filterNewTransactions(batch);
+                if (newTransactions.length > 0) {
+                    await prisma.extractTransaction.createMany({ data: newTransactions });
+                    console.log(`[DEBUG] Yeni işlemler eklendi. Toplam: ${newTransactions.length}`);
+                    await this.updateCustomerBalances(newTransactions);
+                }
+                else {
+                    console.log('[DEBUG] Yeni işlem bulunamadı, hiçbir şey eklenmedi');
+                }
             }
             catch (err) {
                 (0, logger_1.logError)('Batch insert hatası:', err);
@@ -619,25 +703,46 @@ class ExtractController {
     async findOrCreateCustomer(header, userId) {
         if (!header.name)
             return null;
+        console.log('[DEBUG] Müşteri ekleniyor, userId:', userId, 'name:', header.name);
+        if (header.name.toUpperCase().includes('FAKTORİNG')) {
+            console.log('[DEBUG] FAKTORİNG müşterisi atlandı:', header.name);
+            return null;
+        }
         let customer = await prisma.customer.findFirst({
             where: { name: header.name, userId }
         });
-        if (!customer) {
-            const data = {
-                code: this.generateCustomerCode(header.name),
-                name: header.name,
-                originalName: header.name,
-                phone: header.phone,
-                address: header.address,
-                accountType: header.accountType,
-                tag1: header.tag1,
-                tag2: header.tag2
-            };
-            if (userId)
-                data.userId = userId;
-            customer = await prisma.customer.create({
-                data
+        if (!customer && header.code) {
+            customer = await prisma.customer.findFirst({
+                where: { code: header.code, userId }
             });
+        }
+        if (!customer) {
+            const cleanData = {
+                code: header.code || this.generateCustomerCode(header.name),
+                name: header.name.trim(),
+                originalName: header.name.trim(),
+                phone: header.phone || null,
+                address: header.address ? header.address.trim() : null,
+                accountType: header.accountType ? header.accountType.trim() : null,
+                tag1: header.tag1 ? header.tag1.trim() : null,
+                tag2: header.tag2 ? header.tag2.trim() : null,
+                type: header.type || 'INDIVIDUAL'
+            };
+            Object.keys(cleanData).forEach(key => {
+                if (cleanData[key] === '') {
+                    cleanData[key] = null;
+                }
+            });
+            if (userId)
+                cleanData.userId = userId;
+            console.log('[DEBUG] Yeni müşteri oluşturuluyor:', cleanData);
+            customer = await prisma.customer.create({
+                data: cleanData
+            });
+            console.log('[DEBUG] Müşteri oluşturuldu:', customer.id);
+        }
+        else {
+            console.log('[DEBUG] Mevcut müşteri bulundu:', customer.id);
         }
         return customer;
     }
@@ -645,6 +750,93 @@ class ExtractController {
         const cleanName = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
         const timestamp = Date.now().toString().slice(-4);
         return `${cleanName.slice(0, 6)}${timestamp}`;
+    }
+    async filterNewTransactions(transactions) {
+        try {
+            console.log('[DEBUG] Yeni işlemleri filtreleme başlıyor...');
+            const newTransactions = [];
+            for (const transaction of transactions) {
+                const uniqueKey = this.generateTransactionKey(transaction);
+                const existingTransaction = await prisma.extractTransaction.findFirst({
+                    where: {
+                        customerId: transaction.customerId,
+                        voucherNo: transaction.voucherNo,
+                        date: transaction.date,
+                        debit: transaction.debit,
+                        credit: transaction.credit,
+                        description: transaction.description
+                    }
+                });
+                if (!existingTransaction) {
+                    newTransactions.push(transaction);
+                    console.log(`[DEBUG] Yeni işlem bulundu: ${transaction.description} (${transaction.voucherNo})`);
+                }
+                else {
+                    console.log(`[DEBUG] Mevcut işlem atlandı: ${transaction.description} (${transaction.voucherNo})`);
+                }
+            }
+            console.log(`[DEBUG] Toplam ${transactions.length} işlemden ${newTransactions.length} tanesi yeni`);
+            return newTransactions;
+        }
+        catch (error) {
+            (0, logger_1.logError)('İşlem filtreleme hatası:', error);
+            return transactions;
+        }
+    }
+    generateTransactionKey(transaction) {
+        return `${transaction.customerId}_${transaction.voucherNo}_${transaction.date.toISOString()}_${transaction.debit}_${transaction.credit}_${transaction.description}`;
+    }
+    async updateCustomerBalances(transactions) {
+        try {
+            console.log('[DEBUG] Bakiye güncelleme başlıyor...');
+            const customerTransactions = new Map();
+            for (const transaction of transactions) {
+                const customerId = transaction.customerId;
+                if (!customerTransactions.has(customerId)) {
+                    customerTransactions.set(customerId, []);
+                }
+                customerTransactions.get(customerId).push(transaction);
+            }
+            for (const [customerId, customerTxs] of customerTransactions) {
+                let totalDebit = 0;
+                let totalCredit = 0;
+                for (const tx of customerTxs) {
+                    totalDebit += tx.debit || 0;
+                    totalCredit += tx.credit || 0;
+                }
+                const existingBalance = await prisma.balance.findUnique({
+                    where: { customerId }
+                });
+                if (existingBalance) {
+                    await prisma.balance.update({
+                        where: { customerId },
+                        data: {
+                            totalDebit: existingBalance.totalDebit + totalDebit,
+                            totalCredit: existingBalance.totalCredit + totalCredit,
+                            netBalance: (existingBalance.totalCredit + totalCredit) - (existingBalance.totalDebit + totalDebit),
+                            lastUpdated: new Date()
+                        }
+                    });
+                    console.log(`[DEBUG] Müşteri ${customerId} bakiyesi güncellendi`);
+                }
+                else {
+                    await prisma.balance.create({
+                        data: {
+                            customerId,
+                            totalDebit,
+                            totalCredit,
+                            netBalance: totalCredit - totalDebit,
+                            lastUpdated: new Date()
+                        }
+                    });
+                    console.log(`[DEBUG] Müşteri ${customerId} için yeni bakiye oluşturuldu`);
+                }
+            }
+            console.log(`[DEBUG] ${customerTransactions.size} müşteri bakiyesi güncellendi`);
+        }
+        catch (error) {
+            (0, logger_1.logError)('Bakiye güncelleme hatası:', error);
+        }
     }
     async getExtracts(req, res) {
         try {
@@ -753,6 +945,86 @@ class ExtractController {
             });
         }
         return validationResults;
+    }
+    async deleteOldExtracts(req, res) {
+        try {
+            const { beforeDate, deleteAll } = req.body;
+            const userId = req.user.id;
+            let whereClause = { userId };
+            if (deleteAll) {
+                whereClause = { userId };
+            }
+            else if (beforeDate) {
+                whereClause = {
+                    userId,
+                    createdAt: {
+                        lt: new Date(beforeDate)
+                    }
+                };
+            }
+            else {
+                return res.status(400).json({
+                    error: 'beforeDate veya deleteAll parametresi gerekli'
+                });
+            }
+            const extracts = await prisma.extract.findMany({
+                where: whereClause,
+                select: { id: true }
+            });
+            const extractIds = extracts.map(e => e.id);
+            if (extractIds.length === 0) {
+                return res.json({
+                    success: true,
+                    message: 'Silinecek ekstre bulunamadı',
+                    deletedCount: 0
+                });
+            }
+            await prisma.extractTransaction.deleteMany({
+                where: {
+                    extractId: {
+                        in: extractIds
+                    }
+                }
+            });
+            await prisma.extract.deleteMany({
+                where: whereClause
+            });
+            return res.json({
+                success: true,
+                message: `${extractIds.length} ekstre başarıyla silindi`,
+                deletedCount: extractIds.length
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Eski ekstreleri silme hatası:', error);
+            return res.status(500).json({ error: 'Ekstreler silinirken hata oluştu' });
+        }
+    }
+    async deleteExtract(req, res) {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id;
+            const extract = await prisma.extract.findFirst({
+                where: { id, userId }
+            });
+            if (!extract) {
+                return res.status(404).json({ error: 'Ekstre bulunamadı' });
+            }
+            await prisma.extractTransaction.deleteMany({
+                where: { extractId: id }
+            });
+            await prisma.extract.delete({
+                where: { id }
+            });
+            return res.json({
+                success: true,
+                message: 'Ekstre başarıyla silindi'
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Ekstre silme hatası:', error);
+            return res.status(500).json({ error: 'Ekstre silinirken hata oluştu' });
+        }
     }
 }
 exports.ExtractController = ExtractController;

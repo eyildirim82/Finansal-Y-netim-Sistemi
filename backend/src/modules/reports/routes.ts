@@ -81,4 +81,33 @@ router.get('/collections', authMiddleware, dateValidation, ReportController.getC
 // Yaşlandırma analizi
 router.get('/aging', authMiddleware, ReportController.getAgingAnalysis);
 
+// Ödenmemiş faturalar raporu
+router.get('/unpaid-invoices', authMiddleware, [
+  query('customerId').optional().isString().withMessage('Geçerli bir müşteri ID giriniz'),
+  query('startDate').optional().isISO8601().withMessage('Geçerli bir başlangıç tarihi giriniz'),
+  query('endDate').optional().isISO8601().withMessage('Geçerli bir bitiş tarihi giriniz'),
+  query('overdueOnly').optional().isIn(['true', 'false']).withMessage('overdueOnly true veya false olmalıdır'),
+  query('sortBy').optional().isIn(['dueDate', 'date', 'amount', 'customerName']).withMessage('Geçerli bir sıralama alanı giriniz'),
+  query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Geçerli bir sıralama yönü giriniz'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Sayfa numarası pozitif tamsayı olmalıdır'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit 1-100 arasında olmalıdır')
+], ReportController.getUnpaidInvoices);
+
+// Ödenmiş faturalar raporu
+router.get('/paid-invoices', authMiddleware, [
+  query('customerId').optional().isString().withMessage('Geçerli bir müşteri ID giriniz'),
+  query('startDate').optional().isISO8601().withMessage('Geçerli bir başlangıç tarihi giriniz'),
+  query('endDate').optional().isISO8601().withMessage('Geçerli bir bitiş tarihi giriniz'),
+  query('sortBy').optional().isIn(['date', 'amount', 'customerName']).withMessage('Geçerli bir sıralama alanı giriniz'),
+  query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Geçerli bir sıralama yönü giriniz'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Sayfa numarası pozitif tamsayı olmalıdır'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit 1-100 arasında olmalıdır')
+], ReportController.getPaidInvoices);
+
+// Müşteri bazında ödenmemiş faturalar özeti
+router.get('/customer/:customerId/unpaid-invoices', authMiddleware, ReportController.getCustomerUnpaidInvoicesSummary);
+
+// Müşteri bazında ödenmiş faturalar özeti
+router.get('/customer/:customerId/paid-invoices', authMiddleware, ReportController.getCustomerPaidInvoicesSummary);
+
 export default router; 

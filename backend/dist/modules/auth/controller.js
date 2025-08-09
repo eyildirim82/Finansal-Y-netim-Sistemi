@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.changePassword = exports.getProfile = exports.register = exports.login = exports.registerValidation = exports.loginValidation = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const client_1 = require("@prisma/client");
@@ -32,14 +32,17 @@ const generateToken = (userId) => {
 };
 const login = async (req, res) => {
     try {
+        console.log('Login isteği alındı', req.body);
         const errors = (0, express_validator_1.validationResult)(req);
         if (!errors.isEmpty()) {
+            console.log('Validation hatası:', errors.array());
             return res.status(400).json({
                 success: false,
                 errors: errors.array()
             });
         }
         const { username, password } = req.body;
+        console.log('Kullanıcı adı:', username);
         const user = await prisma.user.findFirst({
             where: {
                 OR: [
@@ -48,26 +51,32 @@ const login = async (req, res) => {
                 ]
             }
         });
+        console.log('Bulunan kullanıcı:', user);
         if (!user) {
+            console.log('Kullanıcı bulunamadı');
             return res.status(401).json({
                 success: false,
                 error: 'Geçersiz kullanıcı adı veya şifre'
             });
         }
         if (!user.isActive) {
+            console.log('Kullanıcı pasif durumda');
             return res.status(401).json({
                 success: false,
                 error: 'Hesabınız pasif durumda'
             });
         }
         const isPasswordValid = await bcryptjs_1.default.compare(password, user.password);
+        console.log('Şifre doğrulama sonucu:', isPasswordValid);
         if (!isPasswordValid) {
+            console.log('Şifre yanlış');
             return res.status(401).json({
                 success: false,
                 error: 'Geçersiz kullanıcı adı veya şifre'
             });
         }
         const token = generateToken(user.id);
+        console.log('Token oluşturuldu');
         const { password: _, ...userWithoutPassword } = user;
         return res.json({
             success: true,
@@ -78,6 +87,7 @@ const login = async (req, res) => {
         });
     }
     catch (error) {
+        console.log('Login catch bloğu, hata:', error);
         (0, logger_1.logError)('Login error:', error);
         return res.status(500).json({
             success: false,
@@ -167,7 +177,12 @@ const getProfile = async (req, res) => {
                 error: 'Kullanıcı bulunamadı'
             });
         }
-        return res.json(user);
+        return res.json({
+            success: true,
+            data: {
+                user
+            }
+        });
     }
     catch (error) {
         (0, logger_1.logError)('Get profile error:', error);

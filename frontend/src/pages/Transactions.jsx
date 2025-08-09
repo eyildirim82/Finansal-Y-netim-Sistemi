@@ -39,13 +39,13 @@ const Transactions = () => {
       }
       
       const response = await transactionService.getAllTransactions(params)
-      const { data, pagination: paginationData } = response.data
+      const { transactions, pagination: paginationData } = response.data.data
       
-      setTransactions(data || [])
+      setTransactions(transactions || [])
       setPagination(prev => ({
         ...prev,
-        total: paginationData.total,
-        pages: paginationData.pages
+        total: paginationData?.total || 0,
+        pages: paginationData?.pages || 0
       }))
     } catch (error) {
       console.error('İşlemler yüklenirken hata:', error)

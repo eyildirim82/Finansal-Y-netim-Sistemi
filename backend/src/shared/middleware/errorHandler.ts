@@ -1,4 +1,4 @@
-import { logError } from '@/shared/logger';
+import { logError } from '../logger';
 import { Request, Response, NextFunction } from 'express';
 
 export interface AppError extends Error {

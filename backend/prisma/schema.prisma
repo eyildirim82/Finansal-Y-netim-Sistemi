@@ -44,6 +44,7 @@ model Customer {
   accountType           String?  // Hesap tipi
   lastPaymentDate       DateTime?
   paymentPattern        String?  // 'regular', 'irregular', 'delayed'
+  dueDays               Int?     // Vade günü (30, 60, 90 gibi)
   tag1                  String?  // Etiket 1
   tag2                  String?  // Etiket 2
   isActive              Boolean  @default(true)
@@ -168,6 +169,8 @@ model ExtractTransaction {
   extract  Extract   @relation(fields: [extractId], references: [id])
   customer Customer? @relation(fields: [customerId], references: [id])
 
+  // Benzersiz işlem tanımlayıcısı
+  @@unique([customerId, voucherNo, date, description, debit, credit])
   @@map("extract_transactions")
 }
 

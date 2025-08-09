@@ -53,4 +53,10 @@ router.get('/:id', controller.getExtractDetail.bind(controller));
 // Bakiye doğrulama
 router.get('/:extractId/validate-balances', controller.validateBalances.bind(controller));
 
+// Eski ekstreleri silme
+router.delete('/delete-old', controller.deleteOldExtracts.bind(controller));
+
+// Belirli bir ekstreyi silme
+router.delete('/:id', controller.deleteExtract.bind(controller));
+
 export default router; 

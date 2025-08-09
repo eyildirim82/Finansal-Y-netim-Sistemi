@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentMatchingService = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const client_1 = require("@prisma/client");
 class PaymentMatchingService {
     constructor() {
@@ -128,7 +128,12 @@ class PaymentMatchingService {
         try {
             const customers = await this.prisma.customer.findMany({
                 where: {
-                    isActive: true
+                    isActive: true,
+                    name: {
+                        not: {
+                            contains: 'FAKTORİNG'
+                        }
+                    }
                 },
                 select: {
                     id: true,

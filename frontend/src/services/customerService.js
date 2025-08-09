@@ -26,6 +26,11 @@ const customerService = {
     return apiClient.put(`/customers/${id}`, customerData)
   },
 
+  // Vade günü güncelle (sadece dueDays alanı için)
+  updateCustomerDueDays: (id, dueDays) => {
+    return apiClient.patch(`/customers/${id}/due-days`, { dueDays })
+  },
+
   // Müşteri sil
   deleteCustomer: (id) => {
     return apiClient.delete(`/customers/${id}`)
@@ -44,6 +49,11 @@ const customerService = {
   // Müşteri arama
   searchCustomers: (params = {}) => {
     return apiClient.get('/customers/search', { params })
+  },
+
+  // Eski müşterileri sil
+  deleteOldCustomers: (params = {}) => {
+    return apiClient.delete('/customers/delete-old', { data: params })
   }
 }
 

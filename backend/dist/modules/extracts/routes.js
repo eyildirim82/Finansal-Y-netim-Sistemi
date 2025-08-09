@@ -43,5 +43,7 @@ router.post('/upload', upload.single('file'), controller.uploadExcel.bind(contro
 router.get('/', controller.getExtracts.bind(controller));
 router.get('/:id', controller.getExtractDetail.bind(controller));
 router.get('/:extractId/validate-balances', controller.validateBalances.bind(controller));
+router.delete('/delete-old', controller.deleteOldExtracts.bind(controller));
+router.delete('/:id', controller.deleteExtract.bind(controller));
 exports.default = router;
 //# sourceMappingURL=routes.js.map

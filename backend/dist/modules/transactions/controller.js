@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TransactionController = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const client_1 = require("@prisma/client");
 const express_validator_1 = require("express-validator");
 const prisma = new client_1.PrismaClient();

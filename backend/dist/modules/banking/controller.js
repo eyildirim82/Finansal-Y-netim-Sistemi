@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BankingController = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const client_1 = require("@prisma/client");
 const emailService_1 = require("./emailService");
 const paymentMatchingService_1 = require("./paymentMatchingService");

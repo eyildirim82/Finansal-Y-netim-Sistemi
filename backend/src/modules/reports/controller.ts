@@ -1,4 +1,4 @@
-import { logError } from '@/shared/logger';
+import { logError } from '../../shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -847,6 +847,593 @@ export class ReportController {
       res.status(500).json({
         success: false,
         message: 'Yaşlandırma analizi getirilirken bir hata oluştu'
+      });
+    }
+  }
+
+  // Ödenmemiş faturalar raporu
+  static async getUnpaidInvoices(req: Request, res: Response) {
+    try {
+      const { 
+        customerId, 
+        startDate, 
+        endDate, 
+        overdueOnly = 'false',
+        sortBy = 'dueDate',
+        sortOrder = 'asc',
+        page = 1,
+        limit = 50
+      } = req.query;
+      
+      const userId = (req as any).user.id;
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      // Filtreleme koşulları
+      const where: any = {
+        extract: {
+          userId: userId
+        },
+        debit: {
+          gt: 0 // Sadece borç işlemleri (fatura)
+        }
+      };
+
+      // Müşteri filtresi
+      if (customerId) {
+        where.customerId = customerId as string;
+      }
+
+      // Tarih filtresi
+      if (startDate || endDate) {
+        where.date = {};
+        if (startDate) {
+          where.date.gte = new Date(startDate as string);
+        }
+        if (endDate) {
+          where.date.lte = new Date(endDate as string);
+        }
+      }
+
+      // Sadece vadesi geçmiş faturalar
+      if (overdueOnly === 'true') {
+        where.dueDate = {
+          lt: new Date()
+        };
+      }
+
+      // Toplam kayıt sayısı
+      const total = await prisma.extractTransaction.count({ where });
+
+      // Ödenmemiş faturaları getir
+      const unpaidInvoices = await prisma.extractTransaction.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true,
+              dueDays: true
+            }
+          },
+          extract: {
+            select: {
+              fileName: true,
+              uploadDate: true
+            }
+          }
+        },
+        orderBy: {
+          [sortBy as string]: sortOrder as 'asc' | 'desc'
+        },
+        skip,
+        take: limitNum
+      });
+
+      // Her fatura için ödeme durumunu hesapla
+      const invoicesWithPaymentStatus = unpaidInvoices.map(invoice => {
+        const dueDate = invoice.dueDate;
+        const today = new Date();
+        const isOverdue = dueDate ? dueDate < today : false;
+        
+        let overdueDays = 0;
+        if (dueDate && isOverdue) {
+          overdueDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        // Vade kategorisi
+        let overdueCategory = 'current';
+        if (isOverdue) {
+          if (overdueDays <= 30) {
+            overdueCategory = 'days30';
+          } else if (overdueDays <= 60) {
+            overdueCategory = 'days60';
+          } else if (overdueDays <= 90) {
+            overdueCategory = 'days90';
+          } else {
+            overdueCategory = 'days90plus';
+          }
+        }
+
+        return {
+          ...invoice,
+          isOverdue,
+          overdueDays,
+          overdueCategory,
+          amount: invoice.debit, // Fatura tutarı
+          remainingAmount: invoice.debit // Şimdilik tam tutar (ödeme eşleştirmesi eklenecek)
+        };
+      });
+
+      // Özet istatistikler
+      const summary = {
+        totalInvoices: total,
+        totalAmount: invoicesWithPaymentStatus.reduce((sum, inv) => sum + inv.amount, 0),
+        overdueInvoices: invoicesWithPaymentStatus.filter(inv => inv.isOverdue).length,
+        overdueAmount: invoicesWithPaymentStatus
+          .filter(inv => inv.isOverdue)
+          .reduce((sum, inv) => sum + inv.amount, 0),
+        overdueCategories: {
+          current: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'current').length,
+          days30: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days30').length,
+          days60: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days60').length,
+          days90: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days90').length,
+          days90plus: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days90plus').length
+        }
+      };
+
+      res.json({
+        success: true,
+        data: {
+          invoices: invoicesWithPaymentStatus,
+          summary,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
+        }
+      });
+
+    } catch (error) {
+      logError('Ödenmemiş faturalar raporu hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Ödenmemiş faturalar raporu getirilirken bir hata oluştu'
+      });
+    }
+  }
+
+  // Ödenmiş faturalar raporu - FIFO mantığı ile
+  static async getPaidInvoices(req: Request, res: Response) {
+    try {
+      const { 
+        customerId, 
+        startDate, 
+        endDate, 
+        sortBy = 'date',
+        sortOrder = 'desc',
+        page = 1,
+        limit = 50
+      } = req.query;
+      
+      const userId = (req as any).user.id;
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      // Müşteri filtresi
+      const customerFilter = customerId ? { customerId: customerId as string } : {};
+
+      // Tarih filtresi
+      const dateFilter: any = {};
+      if (startDate || endDate) {
+        if (startDate) {
+          dateFilter.gte = new Date(startDate as string);
+        }
+        if (endDate) {
+          dateFilter.lte = new Date(endDate as string);
+        }
+      }
+
+      // 1. Önce tüm borç işlemlerini (faturalar) getir
+      const allInvoices = await prisma.extractTransaction.findMany({
+        where: {
+          ...customerFilter,
+          extract: {
+            userId: userId
+          },
+          debit: {
+            gt: 0
+          },
+          date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true
+            }
+          }
+        },
+        orderBy: {
+          date: 'asc' // FIFO için tarihe göre sırala
+        }
+      });
+
+      // 2. Tüm alacak işlemlerini (ödemeler) getir
+      const allPayments = await prisma.extractTransaction.findMany({
+        where: {
+          ...customerFilter,
+          extract: {
+            userId: userId
+          },
+          credit: {
+            gt: 0
+          },
+          date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true
+            }
+          }
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      });
+
+      // 3. FIFO mantığı ile ödenmiş faturaları hesapla
+      const paidInvoices: any[] = [];
+      const remainingPayments = [...allPayments];
+
+      for (const invoice of allInvoices) {
+        let remainingInvoiceAmount = invoice.debit;
+        const paymentsForThisInvoice: any[] = [];
+
+        // Bu fatura için ödeme arayalım
+        for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+          const payment = remainingPayments[i];
+          
+          // Aynı müşteriye ait ödeme mi?
+          if (payment.customerId === invoice.customerId) {
+            const paymentAmount = Math.min(payment.credit, remainingInvoiceAmount);
+            
+            paymentsForThisInvoice.push({
+              ...payment,
+              appliedAmount: paymentAmount,
+              paymentDate: payment.date
+            });
+
+            remainingInvoiceAmount -= paymentAmount;
+            payment.credit -= paymentAmount;
+
+            // Eğer ödeme tamamen kullanıldıysa listeden çıkar
+            if (payment.credit <= 0) {
+              remainingPayments.splice(i, 1);
+              i--; // Index'i düzelt
+            }
+          }
+        }
+
+        // Eğer bu fatura için ödeme yapılmışsa
+        if (paymentsForThisInvoice.length > 0) {
+          const totalPaid = invoice.debit - remainingInvoiceAmount;
+          const paidPercentage = (totalPaid / invoice.debit) * 100;
+
+          // Tamamen ödenmiş faturalar
+          if (remainingInvoiceAmount <= 0) {
+            paidInvoices.push({
+              ...invoice,
+              amount: invoice.debit,
+              paidAmount: totalPaid,
+              remainingAmount: 0,
+              paidPercentage: 100,
+              isFullyPaid: true,
+              payments: paymentsForThisInvoice,
+              lastPaymentDate: paymentsForThisInvoice[paymentsForThisInvoice.length - 1].paymentDate,
+              paymentMethod: paymentsForThisInvoice[0].documentType || 'Nakit'
+            });
+          }
+          // Kısmen ödenmiş faturalar (opsiyonel - şimdilik sadece tamamen ödenmişleri göster)
+        }
+      }
+
+      // 4. Sıralama ve sayfalama
+      let sortedPaidInvoices = paidInvoices;
+      if (sortBy === 'date') {
+        sortedPaidInvoices.sort((a, b) => {
+          const dateA = new Date(a.lastPaymentDate).getTime();
+          const dateB = new Date(b.lastPaymentDate).getTime();
+          return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+        });
+      } else if (sortBy === 'amount') {
+        sortedPaidInvoices.sort((a, b) => {
+          return sortOrder === 'asc' ? a.amount - b.amount : b.amount - a.amount;
+        });
+      }
+
+      // Sayfalama
+      const total = sortedPaidInvoices.length;
+      const paginatedInvoices = sortedPaidInvoices.slice(skip, skip + limitNum);
+
+      // 5. Özet istatistikler
+      const summary = {
+        totalPaidInvoices: total,
+        totalAmount: paidInvoices.reduce((sum, inv) => sum + inv.amount, 0),
+        averagePayment: total > 0 ? paidInvoices.reduce((sum, inv) => sum + inv.amount, 0) / total : 0,
+        paymentMethods: {
+          cash: paidInvoices.filter(p => p.paymentMethod === 'Nakit').length,
+          bank: paidInvoices.filter(p => p.paymentMethod === 'Banka').length,
+          check: paidInvoices.filter(p => p.paymentMethod === 'Çek').length,
+          other: paidInvoices.filter(p => !['Nakit', 'Banka', 'Çek'].includes(p.paymentMethod)).length
+        }
+      };
+
+      res.json({
+        success: true,
+        data: {
+          payments: paginatedInvoices,
+          summary,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum)
+          }
+        }
+      });
+
+    } catch (error) {
+      logError('Ödenmiş faturalar raporu hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Ödenmiş faturalar raporu getirilirken bir hata oluştu'
+      });
+    }
+  }
+
+  // Müşteri bazında ödenmemiş faturalar özeti
+  static async getCustomerUnpaidInvoicesSummary(req: Request, res: Response) {
+    try {
+      const { customerId } = req.params;
+      const userId = (req as any).user.id;
+
+      // Müşterinin var olup olmadığını kontrol et
+      const customer = await prisma.customer.findFirst({
+        where: { 
+          id: customerId,
+          userId: userId
+        }
+      });
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Müşteri bulunamadı'
+        });
+      }
+
+      // Müşterinin ödenmemiş faturalarını getir
+      const unpaidInvoices = await prisma.extractTransaction.findMany({
+        where: {
+          customerId: customerId,
+          extract: {
+            userId: userId
+          },
+          debit: {
+            gt: 0
+          }
+        },
+        include: {
+          extract: {
+            select: {
+              fileName: true,
+              uploadDate: true
+            }
+          }
+        },
+        orderBy: {
+          dueDate: 'asc'
+        }
+      });
+
+      // Fatura analizi
+      const invoiceAnalysis = unpaidInvoices.map(invoice => {
+        const dueDate = invoice.dueDate;
+        const today = new Date();
+        const isOverdue = dueDate ? dueDate < today : false;
+        
+        let overdueDays = 0;
+        if (dueDate && isOverdue) {
+          overdueDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        return {
+          ...invoice,
+          isOverdue,
+          overdueDays,
+          amount: invoice.debit
+        };
+      });
+
+      // Özet istatistikler
+      const summary = {
+        totalInvoices: invoiceAnalysis.length,
+        totalAmount: invoiceAnalysis.reduce((sum, inv) => sum + inv.amount, 0),
+        overdueInvoices: invoiceAnalysis.filter(inv => inv.isOverdue).length,
+        overdueAmount: invoiceAnalysis.filter(inv => inv.isOverdue).reduce((sum, inv) => sum + inv.amount, 0),
+        averageOverdueDays: invoiceAnalysis.filter(inv => inv.isOverdue).length > 0 
+          ? Math.round(invoiceAnalysis.filter(inv => inv.isOverdue).reduce((sum, inv) => sum + inv.overdueDays, 0) / invoiceAnalysis.filter(inv => inv.isOverdue).length)
+          : 0
+      };
+
+      res.json({
+        success: true,
+        data: {
+          customer,
+          invoices: invoiceAnalysis,
+          summary
+        }
+      });
+
+    } catch (error) {
+      logError('Müşteri ödenmemiş faturalar özeti hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Müşteri ödenmemiş faturalar özeti getirilirken bir hata oluştu'
+      });
+    }
+  }
+
+  // Müşteri bazında ödenmiş faturalar özeti - FIFO mantığı ile
+  static async getCustomerPaidInvoicesSummary(req: Request, res: Response) {
+    try {
+      const { customerId } = req.params;
+      const userId = (req as any).user.id;
+
+      // Müşterinin var olup olmadığını kontrol et
+      const customer = await prisma.customer.findFirst({
+        where: { 
+          id: customerId,
+          userId: userId
+        }
+      });
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Müşteri bulunamadı'
+        });
+      }
+
+      // 1. Müşterinin tüm borç işlemlerini (faturalar) getir
+      const allInvoices = await prisma.extractTransaction.findMany({
+        where: {
+          customerId: customerId,
+          extract: {
+            userId: userId
+          },
+          debit: {
+            gt: 0
+          }
+        },
+        orderBy: {
+          date: 'asc' // FIFO için tarihe göre sırala
+        }
+      });
+
+      // 2. Müşterinin tüm alacak işlemlerini (ödemeler) getir
+      const allPayments = await prisma.extractTransaction.findMany({
+        where: {
+          customerId: customerId,
+          extract: {
+            userId: userId
+          },
+          credit: {
+            gt: 0
+          }
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      });
+
+      // 3. FIFO mantığı ile ödenmiş faturaları hesapla
+      const paidInvoices: any[] = [];
+      const remainingPayments = [...allPayments];
+
+      for (const invoice of allInvoices) {
+        let remainingInvoiceAmount = invoice.debit;
+        const paymentsForThisInvoice: any[] = [];
+
+        // Bu fatura için ödeme arayalım
+        for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+          const payment = remainingPayments[i];
+          const paymentAmount = Math.min(payment.credit, remainingInvoiceAmount);
+          
+          paymentsForThisInvoice.push({
+            ...payment,
+            appliedAmount: paymentAmount,
+            paymentDate: payment.date
+          });
+
+          remainingInvoiceAmount -= paymentAmount;
+          payment.credit -= paymentAmount;
+
+          // Eğer ödeme tamamen kullanıldıysa listeden çıkar
+          if (payment.credit <= 0) {
+            remainingPayments.splice(i, 1);
+            i--; // Index'i düzelt
+          }
+        }
+
+        // Eğer bu fatura için ödeme yapılmışsa
+        if (paymentsForThisInvoice.length > 0) {
+          const totalPaid = invoice.debit - remainingInvoiceAmount;
+          const paidPercentage = (totalPaid / invoice.debit) * 100;
+
+          // Tamamen ödenmiş faturalar
+          if (remainingInvoiceAmount <= 0) {
+            paidInvoices.push({
+              ...invoice,
+              amount: invoice.debit,
+              paidAmount: totalPaid,
+              remainingAmount: 0,
+              paidPercentage: 100,
+              isFullyPaid: true,
+              payments: paymentsForThisInvoice,
+              lastPaymentDate: paymentsForThisInvoice[paymentsForThisInvoice.length - 1].paymentDate,
+              paymentMethod: paymentsForThisInvoice[0].documentType || 'Nakit'
+            });
+          }
+        }
+      }
+
+      // 4. Özet istatistikler
+      const summary = {
+        totalPaidInvoices: paidInvoices.length,
+        totalAmount: paidInvoices.reduce((sum, inv) => sum + inv.amount, 0),
+        averagePayment: paidInvoices.length > 0 ? paidInvoices.reduce((sum, inv) => sum + inv.amount, 0) / paidInvoices.length : 0,
+        lastPaymentDate: paidInvoices.length > 0 ? paidInvoices[paidInvoices.length - 1].lastPaymentDate : null,
+        paymentMethods: {
+          cash: paidInvoices.filter(p => p.paymentMethod === 'Nakit').length,
+          bank: paidInvoices.filter(p => p.paymentMethod === 'Banka').length,
+          check: paidInvoices.filter(p => p.paymentMethod === 'Çek').length,
+          other: paidInvoices.filter(p => !['Nakit', 'Banka', 'Çek'].includes(p.paymentMethod)).length
+        }
+      };
+
+      res.json({
+        success: true,
+        data: {
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            code: customer.code,
+            phone: customer.phone
+          },
+          payments: paidInvoices,
+          summary
+        }
+      });
+
+    } catch (error) {
+      logError('Müşteri ödenmiş faturalar özeti hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Müşteri ödenmiş faturalar özeti getirilirken bir hata oluştu'
       });
     }
   }

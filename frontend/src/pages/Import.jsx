@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { Upload, FileText, FileSpreadsheet, Download, X, CheckCircle, AlertCircle } from 'lucide-react'
 import importService from '../services/importService'
 import toast from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
 
 const Import = () => {
   const [dragActive, setDragActive] = useState(false)
@@ -10,6 +11,7 @@ const Import = () => {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [importType, setImportType] = useState('excel')
   const fileInputRef = useRef(null)
+  const navigate = useNavigate()
 
   const handleDrag = (e) => {
     e.preventDefault()
@@ -71,6 +73,8 @@ const Import = () => {
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+      // Başarılı yükleme sonrası müşteriler sayfasına yönlendir
+      navigate('/customers')
     } catch (error) {
       console.error('Dosya yükleme hatası:', error)
       console.error('Error response:', error.response?.data)

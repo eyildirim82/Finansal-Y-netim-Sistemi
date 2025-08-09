@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.roleMiddleware = exports.adminMiddleware = exports.authMiddleware = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../logger");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();

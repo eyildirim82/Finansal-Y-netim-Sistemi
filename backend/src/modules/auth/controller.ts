@@ -1,4 +1,4 @@
-import { logError } from '@/shared/logger';
+import { logError } from '../../shared/logger';
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -39,9 +39,11 @@ const generateToken = (userId: string) => {
 // Login
 export const login = async (req: Request, res: Response) => {
   try {
+    console.log('Login isteği alındı', req.body);
     // Validation kontrolü
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation hatası:', errors.array());
       return res.status(400).json({
         success: false,
         errors: errors.array()
@@ -49,6 +51,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const { username, password } = req.body;
+    console.log('Kullanıcı adı:', username);
 
     // Kullanıcıyı bul
     const user = await prisma.user.findFirst({
@@ -59,8 +62,10 @@ export const login = async (req: Request, res: Response) => {
         ]
       }
     });
+    console.log('Bulunan kullanıcı:', user);
 
     if (!user) {
+      console.log('Kullanıcı bulunamadı');
       return res.status(401).json({
         success: false,
         error: 'Geçersiz kullanıcı adı veya şifre'
@@ -68,6 +73,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user.isActive) {
+      console.log('Kullanıcı pasif durumda');
       return res.status(401).json({
         success: false,
         error: 'Hesabınız pasif durumda'
@@ -76,7 +82,9 @@ export const login = async (req: Request, res: Response) => {
 
     // Şifreyi kontrol et
     const isPasswordValid = await bcrypt.compare(password, user.password);
+    console.log('Şifre doğrulama sonucu:', isPasswordValid);
     if (!isPasswordValid) {
+      console.log('Şifre yanlış');
       return res.status(401).json({
         success: false,
         error: 'Geçersiz kullanıcı adı veya şifre'
@@ -85,6 +93,7 @@ export const login = async (req: Request, res: Response) => {
 
     // Token oluştur
     const token = generateToken(user.id);
+    console.log('Token oluşturuldu');
 
     // Kullanıcı bilgilerini döndür (şifre hariç)
     const { password: _, ...userWithoutPassword } = user;
@@ -98,6 +107,7 @@ export const login = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
+    console.log('Login catch bloğu, hata:', error);
     logError('Login error:', error);
     return res.status(500).json({
       success: false,
@@ -204,7 +214,12 @@ export const getProfile = async (req: Request, res: Response) => {
       });
     }
 
-    return res.json(user);
+    return res.json({
+      success: true,
+      data: {
+        user
+      }
+    });
 
   } catch (error) {
     logError('Get profile error:', error);

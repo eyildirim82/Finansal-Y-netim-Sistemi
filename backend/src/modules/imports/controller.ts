@@ -1,4 +1,4 @@
-import { logError } from '@/shared/logger';
+import { logError } from '../../shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import * as XLSX from 'xlsx';
@@ -6,6 +6,7 @@ import csv from 'csv-parser';
 import { createReadStream } from 'fs';
 import { validationResult } from 'express-validator';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();
 
@@ -345,7 +346,7 @@ export class ImportController {
         });
       } else {
         // CSV dosyasını oku
-        return new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
           const results: any[] = [];
           createReadStream(filePath)
             .pipe(csv())
@@ -361,7 +362,7 @@ export class ImportController {
       }
 
       // Gerekli sütunları kontrol et
-      const requiredColumns = ['name', 'code'];
+      const requiredColumns = ['name'];
       const missingColumns = requiredColumns.filter(col => !Object.keys(data[0] || {}).includes(col));
 
       if (missingColumns.length > 0) {
@@ -378,6 +379,8 @@ export class ImportController {
 
       for (let i = 0; i < data.length; i++) {
         const rowData = data[i];
+        
+        // Veri doğrulama
         const validationResult = ImportController.validateCustomerData(rowData, i + 2);
         
         if (validationResult.isValid) {
@@ -411,19 +414,6 @@ export class ImportController {
       const savedCustomers = [];
       for (const customerData of processedData) {
         try {
-          // Kod benzersizlik kontrolü
-          const existingCustomer = await prisma.customer.findFirst({
-            where: { code: customerData.code }
-          });
-
-          if (existingCustomer) {
-            warnings.push({
-              row: customerData.rowNumber,
-              warnings: ['Bu kod zaten kullanılıyor']
-            });
-            continue;
-          }
-
           const customer = await prisma.customer.create({
             data: {
               ...customerData,
@@ -458,55 +448,58 @@ export class ImportController {
     }
   }
 
-  // İşlem verisi doğrulama
-  private static validateTransactionData(data: any, rowNumber: number) {
+  static async downloadTemplate(req: Request, res: Response) {
+    try {
+      // Burada gerçek template dosyası oluşturulup gönderilebilir
+      return res.status(501).json({ success: false, message: 'Henüz uygulanmadı' });
+    } catch (error) {
+      logError('Template indirme hatası:', error);
+      return res.status(500).json({ success: false, message: 'Template dosyası oluşturulurken bir hata oluştu' });
+    }
+  }
+
+  // Transaction veri doğrulama
+  static validateTransactionData(data: any, rowNumber: number) {
     const errors: string[] = [];
     const warnings: string[] = [];
     const processedData: any = { rowNumber };
 
-    // Type doğrulama
-    if (!data.type || !['INCOME', 'EXPENSE'].includes(data.type.toUpperCase())) {
-      errors.push('Geçerli bir işlem türü gerekli (INCOME/EXPENSE)');
+    // Type validation
+    if (!data.type || !['INCOME', 'EXPENSE'].includes(data.type)) {
+      errors.push('Geçersiz işlem tipi (INCOME veya EXPENSE olmalı)');
     } else {
-      processedData.type = data.type.toUpperCase();
+      processedData.type = data.type;
     }
 
-    // Amount doğrulama
-    const amount = parseFloat(data.amount);
-    if (isNaN(amount) || amount <= 0) {
-      errors.push('Geçerli bir tutar gerekli (0\'dan büyük sayı)');
+    // Amount validation
+    if (!data.amount || isNaN(parseFloat(data.amount))) {
+      errors.push('Geçersiz tutar');
     } else {
-      processedData.amount = amount;
+      processedData.amount = parseFloat(data.amount);
     }
 
-    // Description doğrulama
-    if (!data.description || data.description.trim().length === 0) {
+    // Description validation
+    if (!data.description) {
       errors.push('Açıklama gerekli');
-    } else if (data.description.trim().length > 500) {
-      errors.push('Açıklama 500 karakterden az olmalıdır');
     } else {
-      processedData.description = data.description.trim();
+      processedData.description = data.description;
     }
 
-    // Date doğrulama
-    const date = new Date(data.date);
-    if (isNaN(date.getTime())) {
-      errors.push('Geçerli bir tarih gerekli');
+    // Date validation
+    if (!data.date) {
+      errors.push('Tarih gerekli');
     } else {
-      processedData.date = date;
+      const date = new Date(data.date);
+      if (isNaN(date.getTime())) {
+        errors.push('Geçersiz tarih formatı');
+      } else {
+        processedData.date = date;
+      }
     }
 
-    // Category doğrulama (opsiyonel)
-    if (data.category) {
-      // Kategori adından ID bulma işlemi burada yapılabilir
-      warnings.push('Kategori eşleştirmesi manuel olarak yapılmalıdır');
-    }
-
-    // Customer doğrulama (opsiyonel)
-    if (data.customer) {
-      // Müşteri adından ID bulma işlemi burada yapılabilir
-      warnings.push('Müşteri eşleştirmesi manuel olarak yapılmalıdır');
-    }
+    // Optional fields
+    if (data.customerId) processedData.customerId = data.customerId;
+    if (data.categoryId) processedData.categoryId = data.categoryId;
 
     return {
       isValid: errors.length === 0,
@@ -516,59 +509,39 @@ export class ImportController {
     };
   }
 
-  // Müşteri verisi doğrulama
-  private static validateCustomerData(data: any, rowNumber: number) {
+  // Customer veri doğrulama
+  static validateCustomerData(data: any, rowNumber: number) {
     const errors: string[] = [];
     const warnings: string[] = [];
     const processedData: any = { rowNumber };
 
-    // Name doğrulama
+    // Name validation
     if (!data.name || data.name.trim().length === 0) {
       errors.push('Müşteri adı gerekli');
-    } else if (data.name.trim().length > 200) {
-      errors.push('Müşteri adı 200 karakterden az olmalıdır');
     } else {
       processedData.name = data.name.trim();
     }
 
-    // Code doğrulama
-    if (!data.code || data.code.trim().length === 0) {
-      errors.push('Müşteri kodu gerekli');
-    } else if (data.code.trim().length > 50) {
-      errors.push('Müşteri kodu 50 karakterden az olmalıdır');
+    // Code generation or validation
+    if (data.code) {
+      processedData.code = data.code;
     } else {
-      processedData.code = data.code.trim();
+      processedData.code = `CUST_${uuidv4()}`;
+      warnings.push('Müşteri kodu otomatik oluşturuldu');
     }
 
-    // Phone doğrulama (opsiyonel)
-    if (data.phone) {
-      if (data.phone.trim().length > 20) {
-        errors.push('Telefon numarası 20 karakterden az olmalıdır');
-      } else {
-        processedData.phone = data.phone.trim();
-      }
-    }
-
-    // Address doğrulama (opsiyonel)
-    if (data.address) {
-      if (data.address.trim().length > 500) {
-        errors.push('Adres 500 karakterden az olmalıdır');
-      } else {
-        processedData.address = data.address.trim();
-      }
-    }
-
-    // Type doğrulama (opsiyonel)
-    if (data.type) {
-      if (!['INDIVIDUAL', 'COMPANY'].includes(data.type.toUpperCase())) {
-        warnings.push('Geçersiz müşteri tipi, varsayılan olarak INDIVIDUAL kullanılacak');
-        processedData.type = 'INDIVIDUAL';
-      } else {
-        processedData.type = data.type.toUpperCase();
-      }
+    // Optional fields
+    if (data.phone) processedData.phone = data.phone;
+    if (data.address) processedData.address = data.address;
+    if (data.type && ['INDIVIDUAL', 'CORPORATE'].includes(data.type)) {
+      processedData.type = data.type;
     } else {
       processedData.type = 'INDIVIDUAL';
+      warnings.push('Müşteri tipi varsayılan olarak INDIVIDUAL olarak ayarlandı');
     }
+    if (data.accountType) processedData.accountType = data.accountType;
+    if (data.tag1) processedData.tag1 = data.tag1;
+    if (data.tag2) processedData.tag2 = data.tag2;
 
     return {
       isValid: errors.length === 0,
@@ -577,83 +550,4 @@ export class ImportController {
       warnings
     };
   }
-
-  // Template dosyası indirme
-  static async downloadTemplate(req: Request, res: Response) {
-    try {
-      const { type } = req.query;
-
-      if (!type || !['transactions', 'customers'].includes(type as string)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Geçerli bir template tipi gerekli (transactions/customers)'
-        });
-      }
-
-      let headers: string[] = [];
-      let sampleData: any[] = [];
-
-      if (type === 'transactions') {
-        headers = ['type', 'amount', 'description', 'date', 'category', 'customer'];
-        sampleData = [
-          {
-            type: 'INCOME',
-            amount: '1000.00',
-            description: 'Müşteri ödemesi',
-            date: '2024-01-15',
-            category: 'Satış',
-            customer: 'ABC Şirketi'
-          },
-          {
-            type: 'EXPENSE',
-            amount: '500.00',
-            description: 'Ofis malzemeleri',
-            date: '2024-01-16',
-            category: 'Genel Giderler',
-            customer: ''
-          }
-        ];
-      } else if (type === 'customers') {
-        headers = ['name', 'code', 'phone', 'address', 'type'];
-        sampleData = [
-          {
-            name: 'ABC Şirketi',
-            code: 'ABC001',
-            phone: '0212 123 45 67',
-            address: 'İstanbul, Türkiye',
-            type: 'COMPANY'
-          },
-          {
-            name: 'Ahmet Yılmaz',
-            code: 'AY001',
-            phone: '0532 123 45 67',
-            address: 'Ankara, Türkiye',
-            type: 'INDIVIDUAL'
-          }
-        ];
-      }
-
-      // Excel dosyası oluştur
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet([headers, ...sampleData]);
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
-
-      // Buffer oluştur
-      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-      // Response headers
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${type}_template.xlsx"`);
-      res.setHeader('Content-Length', buffer.length);
-
-      return res.send(buffer);
-
-    } catch (error) {
-      logError('Template indirme hatası:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Template dosyası oluşturulurken bir hata oluştu'
-      });
-    }
-  }
-} 
+}

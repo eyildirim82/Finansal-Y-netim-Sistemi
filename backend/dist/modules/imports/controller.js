@@ -37,12 +37,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ImportController = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const client_1 = require("@prisma/client");
 const XLSX = __importStar(require("xlsx"));
 const csv_parser_1 = __importDefault(require("csv-parser"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
+const uuid_1 = require("uuid");
 const prisma = new client_1.PrismaClient();
 class ImportController {
     static async importExcel(req, res) {
@@ -335,7 +336,7 @@ class ImportController {
                 });
             }
             else {
-                return new Promise((resolve, reject) => {
+                await new Promise((resolve, reject) => {
                     const results = [];
                     (0, fs_1.createReadStream)(filePath)
                         .pipe((0, csv_parser_1.default)())
@@ -349,7 +350,7 @@ class ImportController {
                     });
                 });
             }
-            const requiredColumns = ['name', 'code'];
+            const requiredColumns = ['name'];
             const missingColumns = requiredColumns.filter(col => !Object.keys(data[0] || {}).includes(col));
             if (missingColumns.length > 0) {
                 return res.status(400).json({
@@ -390,16 +391,6 @@ class ImportController {
             const savedCustomers = [];
             for (const customerData of processedData) {
                 try {
-                    const existingCustomer = await prisma.customer.findFirst({
-                        where: { code: customerData.code }
-                    });
-                    if (existingCustomer) {
-                        warnings.push({
-                            row: customerData.rowNumber,
-                            warnings: ['Bu kod zaten kullanılıyor']
-                        });
-                        continue;
-                    }
                     const customer = await prisma.customer.create({
                         data: {
                             ...customerData,
@@ -433,45 +424,53 @@ class ImportController {
             });
         }
     }
+    static async downloadTemplate(req, res) {
+        try {
+            return res.status(501).json({ success: false, message: 'Henüz uygulanmadı' });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Template indirme hatası:', error);
+            return res.status(500).json({ success: false, message: 'Template dosyası oluşturulurken bir hata oluştu' });
+        }
+    }
     static validateTransactionData(data, rowNumber) {
         const errors = [];
         const warnings = [];
         const processedData = { rowNumber };
-        if (!data.type || !['INCOME', 'EXPENSE'].includes(data.type.toUpperCase())) {
-            errors.push('Geçerli bir işlem türü gerekli (INCOME/EXPENSE)');
+        if (!data.type || !['INCOME', 'EXPENSE'].includes(data.type)) {
+            errors.push('Geçersiz işlem tipi (INCOME veya EXPENSE olmalı)');
         }
         else {
-            processedData.type = data.type.toUpperCase();
+            processedData.type = data.type;
         }
-        const amount = parseFloat(data.amount);
-        if (isNaN(amount) || amount <= 0) {
-            errors.push('Geçerli bir tutar gerekli (0\'dan büyük sayı)');
+        if (!data.amount || isNaN(parseFloat(data.amount))) {
+            errors.push('Geçersiz tutar');
         }
         else {
-            processedData.amount = amount;
+            processedData.amount = parseFloat(data.amount);
         }
-        if (!data.description || data.description.trim().length === 0) {
+        if (!data.description) {
             errors.push('Açıklama gerekli');
         }
-        else if (data.description.trim().length > 500) {
-            errors.push('Açıklama 500 karakterden az olmalıdır');
+        else {
+            processedData.description = data.description;
+        }
+        if (!data.date) {
+            errors.push('Tarih gerekli');
         }
         else {
-            processedData.description = data.description.trim();
+            const date = new Date(data.date);
+            if (isNaN(date.getTime())) {
+                errors.push('Geçersiz tarih formatı');
+            }
+            else {
+                processedData.date = date;
+            }
         }
-        const date = new Date(data.date);
-        if (isNaN(date.getTime())) {
-            errors.push('Geçerli bir tarih gerekli');
-        }
-        else {
-            processedData.date = date;
-        }
-        if (data.category) {
-            warnings.push('Kategori eşleştirmesi manuel olarak yapılmalıdır');
-        }
-        if (data.customer) {
-            warnings.push('Müşteri eşleştirmesi manuel olarak yapılmalıdır');
-        }
+        if (data.customerId)
+            processedData.customerId = data.customerId;
+        if (data.categoryId)
+            processedData.categoryId = data.categoryId;
         return {
             isValid: errors.length === 0,
             data: processedData,
@@ -486,123 +485,39 @@ class ImportController {
         if (!data.name || data.name.trim().length === 0) {
             errors.push('Müşteri adı gerekli');
         }
-        else if (data.name.trim().length > 200) {
-            errors.push('Müşteri adı 200 karakterden az olmalıdır');
-        }
         else {
             processedData.name = data.name.trim();
         }
-        if (!data.code || data.code.trim().length === 0) {
-            errors.push('Müşteri kodu gerekli');
-        }
-        else if (data.code.trim().length > 50) {
-            errors.push('Müşteri kodu 50 karakterden az olmalıdır');
+        if (data.code) {
+            processedData.code = data.code;
         }
         else {
-            processedData.code = data.code.trim();
+            processedData.code = `CUST_${(0, uuid_1.v4)()}`;
+            warnings.push('Müşteri kodu otomatik oluşturuldu');
         }
-        if (data.phone) {
-            if (data.phone.trim().length > 20) {
-                errors.push('Telefon numarası 20 karakterden az olmalıdır');
-            }
-            else {
-                processedData.phone = data.phone.trim();
-            }
-        }
-        if (data.address) {
-            if (data.address.trim().length > 500) {
-                errors.push('Adres 500 karakterden az olmalıdır');
-            }
-            else {
-                processedData.address = data.address.trim();
-            }
-        }
-        if (data.type) {
-            if (!['INDIVIDUAL', 'COMPANY'].includes(data.type.toUpperCase())) {
-                warnings.push('Geçersiz müşteri tipi, varsayılan olarak INDIVIDUAL kullanılacak');
-                processedData.type = 'INDIVIDUAL';
-            }
-            else {
-                processedData.type = data.type.toUpperCase();
-            }
+        if (data.phone)
+            processedData.phone = data.phone;
+        if (data.address)
+            processedData.address = data.address;
+        if (data.type && ['INDIVIDUAL', 'CORPORATE'].includes(data.type)) {
+            processedData.type = data.type;
         }
         else {
             processedData.type = 'INDIVIDUAL';
+            warnings.push('Müşteri tipi varsayılan olarak INDIVIDUAL olarak ayarlandı');
         }
+        if (data.accountType)
+            processedData.accountType = data.accountType;
+        if (data.tag1)
+            processedData.tag1 = data.tag1;
+        if (data.tag2)
+            processedData.tag2 = data.tag2;
         return {
             isValid: errors.length === 0,
             data: processedData,
             errors,
             warnings
         };
-    }
-    static async downloadTemplate(req, res) {
-        try {
-            const { type } = req.query;
-            if (!type || !['transactions', 'customers'].includes(type)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Geçerli bir template tipi gerekli (transactions/customers)'
-                });
-            }
-            let headers = [];
-            let sampleData = [];
-            if (type === 'transactions') {
-                headers = ['type', 'amount', 'description', 'date', 'category', 'customer'];
-                sampleData = [
-                    {
-                        type: 'INCOME',
-                        amount: '1000.00',
-                        description: 'Müşteri ödemesi',
-                        date: '2024-01-15',
-                        category: 'Satış',
-                        customer: 'ABC Şirketi'
-                    },
-                    {
-                        type: 'EXPENSE',
-                        amount: '500.00',
-                        description: 'Ofis malzemeleri',
-                        date: '2024-01-16',
-                        category: 'Genel Giderler',
-                        customer: ''
-                    }
-                ];
-            }
-            else if (type === 'customers') {
-                headers = ['name', 'code', 'phone', 'address', 'type'];
-                sampleData = [
-                    {
-                        name: 'ABC Şirketi',
-                        code: 'ABC001',
-                        phone: '0212 123 45 67',
-                        address: 'İstanbul, Türkiye',
-                        type: 'COMPANY'
-                    },
-                    {
-                        name: 'Ahmet Yılmaz',
-                        code: 'AY001',
-                        phone: '0532 123 45 67',
-                        address: 'Ankara, Türkiye',
-                        type: 'INDIVIDUAL'
-                    }
-                ];
-            }
-            const workbook = XLSX.utils.book_new();
-            const worksheet = XLSX.utils.json_to_sheet([headers, ...sampleData]);
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
-            const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-            res.setHeader('Content-Disposition', `attachment; filename="${type}_template.xlsx"`);
-            res.setHeader('Content-Length', buffer.length);
-            return res.send(buffer);
-        }
-        catch (error) {
-            (0, logger_1.logError)('Template indirme hatası:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Template dosyası oluşturulurken bir hata oluştu'
-            });
-        }
     }
 }
 exports.ImportController = ImportController;

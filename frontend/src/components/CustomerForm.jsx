@@ -11,7 +11,8 @@ const CustomerForm = ({ isOpen, onClose, customer = null, onSuccess }) => {
     address: '',
     type: 'INDIVIDUAL',
     taxNumber: '',
-    notes: ''
+    notes: '',
+    dueDays: ''
   })
   const [loading, setLoading] = useState(false)
 
@@ -24,7 +25,8 @@ const CustomerForm = ({ isOpen, onClose, customer = null, onSuccess }) => {
         address: customer.address || '',
         type: customer.type || 'INDIVIDUAL',
         taxNumber: customer.taxNumber || '',
-        notes: customer.notes || ''
+        notes: customer.notes || '',
+        dueDays: customer.dueDays ? customer.dueDays.toString() : ''
       })
     }
   }, [customer])
@@ -185,6 +187,28 @@ const CustomerForm = ({ isOpen, onClose, customer = null, onSuccess }) => {
           </div>
         </div>
       )}
+
+      {/* Vade Günü */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Vade Günü
+        </label>
+        <select
+          value={formData.dueDays}
+          onChange={(e) => handleChange('dueDays', e.target.value)}
+          className="input"
+        >
+          <option value="">Vade günü seçin...</option>
+          <option value="7">7 gün</option>
+          <option value="15">15 gün</option>
+          <option value="30">30 gün</option>
+          <option value="45">45 gün</option>
+          <option value="60">60 gün</option>
+          <option value="90">90 gün</option>
+          <option value="120">120 gün</option>
+          <option value="180">180 gün</option>
+        </select>
+      </div>
 
       {/* Notlar */}
       <div>

@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.YapiKrediFASTEmailService = void 0;
-const logger_1 = require("@/shared/logger");
+const logger_1 = require("../../shared/logger");
 const imapflow_1 = require("imapflow");
 const mailparser_1 = require("mailparser");
 const libmime_1 = require("libmime");

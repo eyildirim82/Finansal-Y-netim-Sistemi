@@ -40,7 +40,7 @@ const customerValidation = [
 ];
 const updateCustomerValidation = [
     (0, express_validator_1.param)('id')
-        .isInt({ min: 1 })
+        .isString()
         .withMessage('Geçerli bir müşteri ID giriniz'),
     ...customerValidation
 ];
@@ -82,17 +82,6 @@ router.get('/search', auth_1.authMiddleware, [
         .isInt({ min: 1, max: 50 })
         .withMessage('Limit 1-50 arasında olmalıdır')
 ], controller_1.CustomerController.searchCustomers);
-router.get('/:id', auth_1.authMiddleware, [
-    (0, express_validator_1.param)('id').isInt({ min: 1 }).withMessage('Geçerli bir müşteri ID giriniz')
-], controller_1.CustomerController.getCustomer);
-router.get('/:customerId/stats', auth_1.authMiddleware, [
-    (0, express_validator_1.param)('customerId').isInt({ min: 1 }).withMessage('Geçerli bir müşteri ID giriniz')
-], controller_1.CustomerController.getCustomerStats);
-router.post('/', auth_1.authMiddleware, customerValidation, controller_1.CustomerController.createCustomer);
-router.put('/:id', auth_1.authMiddleware, updateCustomerValidation, controller_1.CustomerController.updateCustomer);
-router.delete('/:id', auth_1.authMiddleware, [
-    (0, express_validator_1.param)('id').isInt({ min: 1 }).withMessage('Geçerli bir müşteri ID giriniz')
-], controller_1.CustomerController.deleteCustomer);
 router.delete('/bulk/delete', auth_1.authMiddleware, (0, auth_1.roleMiddleware)(['ADMIN']), [
     (0, express_validator_1.body)('ids')
         .isArray({ min: 1 })
@@ -101,5 +90,17 @@ router.delete('/bulk/delete', auth_1.authMiddleware, (0, auth_1.roleMiddleware)(
         .isInt({ min: 1 })
         .withMessage('Geçerli ID\'ler giriniz')
 ], controller_1.CustomerController.deleteMultipleCustomers);
+router.delete('/delete-old', auth_1.authMiddleware, (0, auth_1.roleMiddleware)(['ADMIN']), controller_1.CustomerController.deleteOldCustomers);
+router.post('/', auth_1.authMiddleware, customerValidation, controller_1.CustomerController.createCustomer);
+router.put('/:id', auth_1.authMiddleware, updateCustomerValidation, controller_1.CustomerController.updateCustomer);
+router.delete('/:id', auth_1.authMiddleware, [
+    (0, express_validator_1.param)('id').isString().withMessage('Geçerli bir müşteri ID giriniz')
+], controller_1.CustomerController.deleteCustomer);
+router.get('/:id', auth_1.authMiddleware, [
+    (0, express_validator_1.param)('id').isString().withMessage('Geçerli bir müşteri ID giriniz')
+], controller_1.CustomerController.getCustomer);
+router.get('/:customerId/stats', auth_1.authMiddleware, [
+    (0, express_validator_1.param)('customerId').isString().withMessage('Geçerli bir müşteri ID giriniz')
+], controller_1.CustomerController.getCustomerStats);
 exports.default = router;
 //# sourceMappingURL=routes.js.map

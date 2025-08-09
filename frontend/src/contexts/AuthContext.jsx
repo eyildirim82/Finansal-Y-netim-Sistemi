@@ -40,7 +40,13 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await authService.getProfile()
-      setUser(response.data.data.user)
+      if (response.data && response.data.data && response.data.data.user) {
+        setUser(response.data.data.user)
+      } else {
+        console.error('Invalid response format:', response.data)
+        setToken(null)
+        setUser(null)
+      }
     } catch (error) {
       console.error('Load user error:', error)
       // Token geçersizse sil
@@ -113,10 +119,9 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  // İlk yükleme - şimdilik devre dışı
+  // İlk yükleme - otomatik kullanıcı yükleme
   useEffect(() => {
-    // loadUser() // Geçici olarak devre dışı
-    setLoading(false)
+    loadUser() // Otomatik kullanıcı yükleme aktif
   }, [])
 
   const value = {

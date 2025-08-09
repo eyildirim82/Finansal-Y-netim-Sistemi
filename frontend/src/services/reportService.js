@@ -31,6 +31,11 @@ const reportService = {
     return apiClient.get('/reports/cash-flow', { params })
   },
 
+  // Müşteri ödeme performansı
+  getCustomerPaymentPerformance: (params = {}) => {
+    return apiClient.get('/reports/customer-payment-performance', { params })
+  },
+
   // Ödenmemiş faturalar raporu
   getUnpaidInvoices: (params = '') => {
     return apiClient.get(`/reports/unpaid-invoices?${params}`)

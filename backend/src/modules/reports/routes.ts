@@ -66,6 +66,9 @@ router.get('/customer', authMiddleware, [
   ...limitValidation
 ], ReportController.getCustomerReport);
 
+// Müşteri ödeme performansı raporu
+router.get('/customer-payment-performance', authMiddleware, dateValidation, ReportController.getCustomerPaymentPerformance);
+
 // Günlük trend raporu
 router.get('/daily-trend', authMiddleware, requiredDateValidation, ReportController.getDailyTrend);
 

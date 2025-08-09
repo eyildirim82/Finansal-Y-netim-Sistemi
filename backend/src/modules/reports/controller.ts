@@ -1437,4 +1437,117 @@ export class ReportController {
       });
     }
   }
-} 
+
+  // Müşteri ödeme performansı raporu
+  static async getCustomerPaymentPerformance(req: Request, res: Response) {
+    try {
+      const { startDate, endDate } = req.query;
+      const userId = (req as any).user.id;
+
+      const dateFilter: any = {};
+      if (startDate) {
+        dateFilter.gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        dateFilter.lte = new Date(endDate as string);
+      }
+
+      const transactions = await prisma.extractTransaction.findMany({
+        where: {
+          extract: { userId },
+          date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
+        },
+        include: {
+          customer: {
+            select: { id: true, name: true, code: true }
+          }
+        },
+        orderBy: { date: 'asc' }
+      });
+
+      const customerMap = new Map();
+
+      transactions.forEach(tx => {
+        if (!tx.customerId || !tx.customer) return;
+        if (!customerMap.has(tx.customerId)) {
+          customerMap.set(tx.customerId, {
+            customer: tx.customer,
+            invoices: [],
+            payments: []
+          });
+        }
+        const entry = customerMap.get(tx.customerId);
+        if (tx.debit > 0) {
+          entry.invoices.push({ ...tx, remaining: tx.debit });
+        } else if (tx.credit > 0) {
+          entry.payments.push(tx);
+        }
+      });
+
+      const result: any[] = [];
+
+      customerMap.forEach((value: any) => {
+        const { customer, invoices, payments } = value;
+
+        invoices.sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
+        payments.sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
+
+        payments.forEach((payment: any) => {
+          let remaining = payment.credit;
+          for (const invoice of invoices) {
+            if (remaining <= 0) break;
+            if (invoice.remaining > 0) {
+              const applyAmount = Math.min(invoice.remaining, remaining);
+              invoice.remaining -= applyAmount;
+              remaining -= applyAmount;
+              if (invoice.remaining === 0) {
+                invoice.paidDate = payment.date;
+              }
+            }
+          }
+        });
+
+        let totalDays = 0;
+        let paidCount = 0;
+        let lateCount = 0;
+
+        invoices.forEach((inv: any) => {
+          if (inv.paidDate) {
+            const diffDays = Math.ceil((inv.paidDate.getTime() - inv.date.getTime()) / (1000 * 60 * 60 * 24));
+            totalDays += diffDays;
+            paidCount++;
+            if (inv.dueDate && inv.paidDate > inv.dueDate) {
+              lateCount++;
+            }
+          }
+        });
+
+        const averagePaymentDays = paidCount > 0 ? totalDays / paidCount : 0;
+        const lateInvoicePercentage = paidCount > 0 ? (lateCount / paidCount) * 100 : 0;
+
+        result.push({
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            code: customer.code
+          },
+          totalInvoices: invoices.length,
+          paidInvoices: paidCount,
+          averagePaymentDays,
+          lateInvoicePercentage
+        });
+      });
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logError('Müşteri ödeme performansı raporu hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Müşteri ödeme performansı raporu getirilirken bir hata oluştu'
+      });
+    }
+  }
+}

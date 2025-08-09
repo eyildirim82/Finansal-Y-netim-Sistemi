@@ -15,6 +15,7 @@ import Extracts from './pages/Extracts'
 import Banking from './pages/Banking'
 import Cash from './pages/Cash'
 import ExtractDetail from './pages/ExtractDetail'
+import CustomerPaymentPerformance from './pages/reports/CustomerPaymentPerformance'
 
 // Protected Route bileşeni
 const ProtectedRoute = ({ children }) => {
@@ -62,6 +63,7 @@ const AppContent = () => {
         <Route path="extracts/:id" element={<ExtractDetail />} />
         <Route path="import" element={<Import />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="reports/customer-payment-performance" element={<CustomerPaymentPerformance />} />
         <Route path="unpaid-invoices" element={<UnpaidInvoices />} />
         <Route path="paid-invoices" element={<PaidInvoices />} />
         <Route path="cash" element={<Cash />} />

@@ -14,7 +14,8 @@ import {
   User,
   Settings,
   FileText,
-  CheckCircle
+  CheckCircle,
+  Bug
 } from 'lucide-react'
 
 const Layout = () => {
@@ -32,6 +33,7 @@ const Layout = () => {
     { name: 'Raporlar', href: '/reports', icon: BarChart3 },
     { name: 'Ödenmemiş Faturalar', href: '/unpaid-invoices', icon: FileText },
     { name: 'Ödenmiş Faturalar', href: '/paid-invoices', icon: CheckCircle },
+    { name: 'FIFO Debug', href: '/debug-fifo', icon: Bug },
     { name: 'Kasa', href: '/cash', icon: CreditCard },
     { name: 'Banka', href: '/banking', icon: CreditCard },
   ]

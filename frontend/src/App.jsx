@@ -10,6 +10,7 @@ import Categories from './pages/Categories'
 import Reports from './pages/Reports'
 import UnpaidInvoices from './pages/UnpaidInvoices'
 import PaidInvoices from './pages/PaidInvoices'
+import DebugFifo from './pages/DebugFifo'
 import Import from './pages/Import'
 import Extracts from './pages/Extracts'
 import Banking from './pages/Banking'
@@ -66,6 +67,7 @@ const AppContent = () => {
         <Route path="reports/customer-payment-performance" element={<CustomerPaymentPerformance />} />
         <Route path="unpaid-invoices" element={<UnpaidInvoices />} />
         <Route path="paid-invoices" element={<PaidInvoices />} />
+        <Route path="debug-fifo" element={<DebugFifo />} />
         <Route path="cash" element={<Cash />} />
         <Route path="banking" element={<Banking />} />
       </Route>

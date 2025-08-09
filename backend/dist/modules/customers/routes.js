@@ -25,8 +25,13 @@ const customerValidation = [
         .isLength({ max: 500 })
         .withMessage('Adres 500 karakterden az olmalıdır'),
     (0, express_validator_1.body)('type')
+        .optional()
         .isIn(['INDIVIDUAL', 'COMPANY'])
         .withMessage('Müşteri türü INDIVIDUAL veya COMPANY olmalıdır'),
+    (0, express_validator_1.body)('accountType')
+        .optional()
+        .isIn(['CASH', 'CREDIT', 'FACTORING'])
+        .withMessage('Hesap türü CASH, CREDIT veya FACTORING olmalıdır'),
     (0, express_validator_1.body)('taxNumber')
         .optional()
         .trim()
@@ -36,7 +41,11 @@ const customerValidation = [
         .optional()
         .trim()
         .isLength({ max: 1000 })
-        .withMessage('Notlar 1000 karakterden az olmalıdır')
+        .withMessage('Notlar 1000 karakterden az olmalıdır'),
+    (0, express_validator_1.body)('dueDays')
+        .optional()
+        .isInt({ min: 1, max: 365 })
+        .withMessage('Vade günü 1-365 arasında olmalıdır')
 ];
 const updateCustomerValidation = [
     (0, express_validator_1.param)('id')
@@ -93,6 +102,15 @@ router.delete('/bulk/delete', auth_1.authMiddleware, (0, auth_1.roleMiddleware)(
 router.delete('/delete-old', auth_1.authMiddleware, (0, auth_1.roleMiddleware)(['ADMIN']), controller_1.CustomerController.deleteOldCustomers);
 router.post('/', auth_1.authMiddleware, customerValidation, controller_1.CustomerController.createCustomer);
 router.put('/:id', auth_1.authMiddleware, updateCustomerValidation, controller_1.CustomerController.updateCustomer);
+router.patch('/:id/due-days', auth_1.authMiddleware, [
+    (0, express_validator_1.param)('id')
+        .isString()
+        .withMessage('Geçerli bir müşteri ID giriniz'),
+    (0, express_validator_1.body)('dueDays')
+        .optional()
+        .isInt({ min: 1, max: 365 })
+        .withMessage('Vade günü 1-365 arasında olmalıdır')
+], controller_1.CustomerController.updateCustomerDueDays);
 router.delete('/:id', auth_1.authMiddleware, [
     (0, express_validator_1.param)('id').isString().withMessage('Geçerli bir müşteri ID giriniz')
 ], controller_1.CustomerController.deleteCustomer);

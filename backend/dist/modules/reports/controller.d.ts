@@ -13,5 +13,11 @@ export declare class ReportController {
     private static getCashStats;
     static getCollectionReport(req: Request, res: Response): Promise<void>;
     static getAgingAnalysis(req: Request, res: Response): Promise<void>;
+    static getUnpaidInvoices(req: Request, res: Response): Promise<void>;
+    static getPaidInvoices(req: Request, res: Response): Promise<void>;
+    static getCustomerUnpaidInvoicesSummary(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    static getCustomerPaidInvoicesSummary(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    static getCustomerPaymentPerformance(req: Request, res: Response): Promise<void>;
+    static debugFifoCalculation(req: Request, res: Response): Promise<void>;
 }
 //# sourceMappingURL=controller.d.ts.map

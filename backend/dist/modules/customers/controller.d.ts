@@ -5,6 +5,7 @@ export declare class CustomerController {
     static getCustomer(req: Request, res: Response): Promise<Response>;
     static createCustomer(req: Request, res: Response): Promise<Response>;
     static updateCustomer(req: Request, res: Response): Promise<Response>;
+    static updateCustomerDueDays(req: Request, res: Response): Promise<Response>;
     static deleteCustomer(req: Request, res: Response): Promise<Response>;
     static getCustomerStats(req: Request, res: Response): Promise<Response>;
     static searchCustomers(req: Request, res: Response): Promise<Response>;

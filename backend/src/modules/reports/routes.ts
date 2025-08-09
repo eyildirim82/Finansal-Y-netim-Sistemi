@@ -113,4 +113,7 @@ router.get('/customer/:customerId/unpaid-invoices', authMiddleware, ReportContro
 // Müşteri bazında ödenmiş faturalar özeti
 router.get('/customer/:customerId/paid-invoices', authMiddleware, ReportController.getCustomerPaidInvoicesSummary);
 
+// Debug: FIFO hesaplamasını test et
+router.get('/debug-fifo', authMiddleware, ReportController.debugFifoCalculation);
+
 export default router; 

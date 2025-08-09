@@ -275,7 +275,7 @@ class CustomerController {
                     errors: errors.array()
                 });
             }
-            const { name, phone, address, type = 'INDIVIDUAL', accountType, tag1, tag2 } = req.body;
+            const { name, phone, address, type = 'INDIVIDUAL', accountType, tag1, tag2, dueDays } = req.body;
             const userId = req.user.id;
             let code;
             do {
@@ -291,6 +291,7 @@ class CustomerController {
                     accountType,
                     tag1,
                     tag2,
+                    dueDays: dueDays ? parseInt(dueDays) : null,
                     userId: userId
                 }
             });
@@ -321,7 +322,7 @@ class CustomerController {
             const { id } = req.params;
             const customerId = id;
             const userId = req.user.id;
-            const { name, phone, address, type, accountType, tag1, tag2 } = req.body;
+            const { dueDays } = req.body;
             const existingCustomer = await prisma.customer.findFirst({
                 where: {
                     id: customerId,
@@ -337,13 +338,7 @@ class CustomerController {
             const customer = await prisma.customer.update({
                 where: { id: customerId },
                 data: {
-                    name,
-                    phone,
-                    address,
-                    type,
-                    accountType,
-                    tag1,
-                    tag2
+                    dueDays: dueDays ? parseInt(dueDays) : null
                 }
             });
             return res.json({
@@ -357,6 +352,52 @@ class CustomerController {
             return res.status(500).json({
                 success: false,
                 message: (0, i18n_1.t)(req, 'CUSTOMER_UPDATE_ERROR')
+            });
+        }
+    }
+    static async updateCustomerDueDays(req, res) {
+        try {
+            const errors = (0, express_validator_1.validationResult)(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    message: (0, i18n_1.t)(req, 'VALIDATION_ERROR'),
+                    errors: errors.array()
+                });
+            }
+            const { id } = req.params;
+            const customerId = id;
+            const userId = req.user.id;
+            const { dueDays } = req.body;
+            const existingCustomer = await prisma.customer.findFirst({
+                where: {
+                    id: customerId,
+                    userId: userId
+                }
+            });
+            if (!existingCustomer) {
+                return res.status(404).json({
+                    success: false,
+                    message: (0, i18n_1.t)(req, 'CUSTOMER_NOT_FOUND')
+                });
+            }
+            const customer = await prisma.customer.update({
+                where: { id: customerId },
+                data: {
+                    dueDays: dueDays ? parseInt(dueDays) : null
+                }
+            });
+            return res.json({
+                success: true,
+                message: 'Vade günü başarıyla güncellendi',
+                data: customer
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Vade günü güncellenirken hata:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Vade günü güncellenirken hata oluştu'
             });
         }
     }

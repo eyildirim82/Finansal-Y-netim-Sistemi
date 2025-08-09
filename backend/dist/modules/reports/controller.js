@@ -712,6 +712,778 @@ class ReportController {
             });
         }
     }
+    static async getUnpaidInvoices(req, res) {
+        try {
+            const { customerId, startDate, endDate, overdueOnly = 'false', sortBy = 'dueDate', sortOrder = 'asc', page = 1, limit = 50 } = req.query;
+            const userId = req.user.id;
+            const pageNum = Number(page);
+            const limitNum = Number(limit);
+            const skip = (pageNum - 1) * limitNum;
+            const where = {
+                extract: {
+                    userId: userId
+                },
+                debit: {
+                    gt: 0
+                },
+                documentType: {
+                    in: ['Fatura', 'FATURA', 'fatura']
+                }
+            };
+            if (customerId) {
+                where.customerId = customerId;
+            }
+            if (startDate || endDate) {
+                where.date = {};
+                if (startDate) {
+                    where.date.gte = new Date(startDate);
+                }
+                if (endDate) {
+                    where.date.lte = new Date(endDate);
+                }
+            }
+            if (overdueOnly === 'true') {
+                where.dueDate = {
+                    lt: new Date()
+                };
+            }
+            const total = await prisma.extractTransaction.count({ where });
+            const unpaidInvoices = await prisma.extractTransaction.findMany({
+                where,
+                include: {
+                    customer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true,
+                            phone: true,
+                            dueDays: true
+                        }
+                    },
+                    extract: {
+                        select: {
+                            fileName: true,
+                            uploadDate: true
+                        }
+                    }
+                },
+                orderBy: {
+                    [sortBy]: sortOrder
+                },
+                skip,
+                take: limitNum
+            });
+            const invoicesWithPaymentStatus = unpaidInvoices.map(invoice => {
+                const dueDate = invoice.dueDate;
+                const today = new Date();
+                const isOverdue = dueDate ? dueDate < today : false;
+                let overdueDays = 0;
+                if (dueDate && isOverdue) {
+                    overdueDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+                }
+                let overdueCategory = 'current';
+                if (isOverdue) {
+                    if (overdueDays <= 30) {
+                        overdueCategory = 'days30';
+                    }
+                    else if (overdueDays <= 60) {
+                        overdueCategory = 'days60';
+                    }
+                    else if (overdueDays <= 90) {
+                        overdueCategory = 'days90';
+                    }
+                    else {
+                        overdueCategory = 'days90plus';
+                    }
+                }
+                return {
+                    ...invoice,
+                    isOverdue,
+                    overdueDays,
+                    overdueCategory,
+                    amount: invoice.debit,
+                    remainingAmount: invoice.debit
+                };
+            });
+            const summary = {
+                totalInvoices: total,
+                totalAmount: invoicesWithPaymentStatus.reduce((sum, inv) => sum + inv.amount, 0),
+                overdueInvoices: invoicesWithPaymentStatus.filter(inv => inv.isOverdue).length,
+                overdueAmount: invoicesWithPaymentStatus
+                    .filter(inv => inv.isOverdue)
+                    .reduce((sum, inv) => sum + inv.amount, 0),
+                overdueCategories: {
+                    current: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'current').length,
+                    days30: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days30').length,
+                    days60: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days60').length,
+                    days90: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days90').length,
+                    days90plus: invoicesWithPaymentStatus.filter(inv => inv.overdueCategory === 'days90plus').length
+                }
+            };
+            res.json({
+                success: true,
+                data: {
+                    invoices: invoicesWithPaymentStatus,
+                    summary,
+                    pagination: {
+                        page: pageNum,
+                        limit: limitNum,
+                        total,
+                        pages: Math.ceil(total / limitNum)
+                    }
+                }
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Ödenmemiş faturalar raporu hatası:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Ödenmemiş faturalar raporu getirilirken bir hata oluştu'
+            });
+        }
+    }
+    static async getPaidInvoices(req, res) {
+        try {
+            const { customerId, startDate, endDate, sortBy = 'date', sortOrder = 'desc', page = 1, limit = 50 } = req.query;
+            const userId = req.user.id;
+            const pageNum = Number(page);
+            const limitNum = Number(limit);
+            const skip = (pageNum - 1) * limitNum;
+            const customerFilter = customerId ? { customerId: customerId } : {};
+            const dateFilter = {};
+            if (startDate || endDate) {
+                if (startDate) {
+                    dateFilter.gte = new Date(startDate);
+                }
+                if (endDate) {
+                    dateFilter.lte = new Date(endDate);
+                }
+            }
+            const allInvoices = await prisma.extractTransaction.findMany({
+                where: {
+                    ...customerFilter,
+                    extract: {
+                        userId: userId
+                    },
+                    debit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Fatura', 'FATURA', 'fatura']
+                    },
+                    date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
+                },
+                include: {
+                    customer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true,
+                            phone: true
+                        }
+                    }
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            });
+            const allPayments = await prisma.extractTransaction.findMany({
+                where: {
+                    ...customerFilter,
+                    extract: {
+                        userId: userId
+                    },
+                    credit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme']
+                    },
+                    date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
+                },
+                include: {
+                    customer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true,
+                            phone: true
+                        }
+                    }
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            });
+            const paidInvoices = [];
+            const customerGroups = new Map();
+            for (const invoice of allInvoices) {
+                const customerId = invoice.customerId;
+                if (!customerGroups.has(customerId)) {
+                    customerGroups.set(customerId, {
+                        invoices: [],
+                        payments: []
+                    });
+                }
+                customerGroups.get(customerId).invoices.push(invoice);
+            }
+            for (const payment of allPayments) {
+                const customerId = payment.customerId;
+                if (!customerGroups.has(customerId)) {
+                    customerGroups.set(customerId, {
+                        invoices: [],
+                        payments: []
+                    });
+                }
+                customerGroups.get(customerId).payments.push(payment);
+            }
+            for (const [customerId, group] of customerGroups) {
+                const { invoices, payments } = group;
+                invoices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                payments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                let remainingPayments = [...payments];
+                for (const invoice of invoices) {
+                    let remainingInvoiceAmount = invoice.debit;
+                    const paymentsForThisInvoice = [];
+                    for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+                        const payment = remainingPayments[i];
+                        const availablePaymentAmount = payment.credit;
+                        const paymentAmount = Math.min(availablePaymentAmount, remainingInvoiceAmount);
+                        paymentsForThisInvoice.push({
+                            ...payment,
+                            appliedAmount: paymentAmount,
+                            paymentDate: payment.date
+                        });
+                        remainingInvoiceAmount -= paymentAmount;
+                        payment.credit -= paymentAmount;
+                        if (payment.credit <= 0) {
+                            remainingPayments.splice(i, 1);
+                            i--;
+                        }
+                    }
+                    if (paymentsForThisInvoice.length > 0) {
+                        const totalPaid = invoice.debit - remainingInvoiceAmount;
+                        const paidPercentage = (totalPaid / invoice.debit) * 100;
+                        if (remainingInvoiceAmount <= 0) {
+                            paidInvoices.push({
+                                ...invoice,
+                                amount: invoice.debit,
+                                paidAmount: totalPaid,
+                                remainingAmount: 0,
+                                paidPercentage: 100,
+                                isFullyPaid: true,
+                                payments: paymentsForThisInvoice,
+                                lastPaymentDate: paymentsForThisInvoice[paymentsForThisInvoice.length - 1].paymentDate,
+                                paymentMethod: paymentsForThisInvoice[0].documentType || 'Nakit'
+                            });
+                        }
+                    }
+                }
+            }
+            let sortedPaidInvoices = paidInvoices;
+            if (sortBy === 'date') {
+                sortedPaidInvoices.sort((a, b) => {
+                    const dateA = new Date(a.lastPaymentDate).getTime();
+                    const dateB = new Date(b.lastPaymentDate).getTime();
+                    return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+                });
+            }
+            else if (sortBy === 'amount') {
+                sortedPaidInvoices.sort((a, b) => {
+                    return sortOrder === 'asc' ? a.amount - b.amount : b.amount - a.amount;
+                });
+            }
+            const total = sortedPaidInvoices.length;
+            const paginatedInvoices = sortedPaidInvoices.slice(skip, skip + limitNum);
+            const summary = {
+                totalPaidInvoices: total,
+                totalAmount: paidInvoices.reduce((sum, inv) => sum + inv.amount, 0),
+                averagePayment: total > 0 ? paidInvoices.reduce((sum, inv) => sum + inv.amount, 0) / total : 0,
+                paymentMethods: {
+                    cash: paidInvoices.filter(p => p.paymentMethod === 'Nakit').length,
+                    bank: paidInvoices.filter(p => p.paymentMethod === 'Banka').length,
+                    check: paidInvoices.filter(p => p.paymentMethod === 'Çek').length,
+                    other: paidInvoices.filter(p => !['Nakit', 'Banka', 'Çek'].includes(p.paymentMethod)).length
+                }
+            };
+            res.json({
+                success: true,
+                data: {
+                    payments: paginatedInvoices,
+                    summary,
+                    pagination: {
+                        page: pageNum,
+                        limit: limitNum,
+                        total,
+                        pages: Math.ceil(total / limitNum)
+                    }
+                }
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Ödenmiş faturalar raporu hatası:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Ödenmiş faturalar raporu getirilirken bir hata oluştu'
+            });
+        }
+    }
+    static async getCustomerUnpaidInvoicesSummary(req, res) {
+        try {
+            const { customerId } = req.params;
+            const userId = req.user.id;
+            const customer = await prisma.customer.findFirst({
+                where: {
+                    id: customerId,
+                    userId: userId
+                }
+            });
+            if (!customer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Müşteri bulunamadı'
+                });
+            }
+            const unpaidInvoices = await prisma.extractTransaction.findMany({
+                where: {
+                    customerId: customerId,
+                    extract: {
+                        userId: userId
+                    },
+                    debit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Fatura', 'FATURA', 'fatura']
+                    }
+                },
+                include: {
+                    extract: {
+                        select: {
+                            fileName: true,
+                            uploadDate: true
+                        }
+                    }
+                },
+                orderBy: {
+                    dueDate: 'asc'
+                }
+            });
+            const invoiceAnalysis = unpaidInvoices.map(invoice => {
+                const dueDate = invoice.dueDate;
+                const today = new Date();
+                const isOverdue = dueDate ? dueDate < today : false;
+                let overdueDays = 0;
+                if (dueDate && isOverdue) {
+                    overdueDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+                }
+                return {
+                    ...invoice,
+                    isOverdue,
+                    overdueDays,
+                    amount: invoice.debit
+                };
+            });
+            const summary = {
+                totalInvoices: invoiceAnalysis.length,
+                totalAmount: invoiceAnalysis.reduce((sum, inv) => sum + inv.amount, 0),
+                overdueInvoices: invoiceAnalysis.filter(inv => inv.isOverdue).length,
+                overdueAmount: invoiceAnalysis.filter(inv => inv.isOverdue).reduce((sum, inv) => sum + inv.amount, 0),
+                averageOverdueDays: invoiceAnalysis.filter(inv => inv.isOverdue).length > 0
+                    ? Math.round(invoiceAnalysis.filter(inv => inv.isOverdue).reduce((sum, inv) => sum + inv.overdueDays, 0) / invoiceAnalysis.filter(inv => inv.isOverdue).length)
+                    : 0
+            };
+            return res.json({
+                success: true,
+                data: {
+                    customer,
+                    invoices: invoiceAnalysis,
+                    summary
+                }
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Müşteri ödenmemiş faturalar özeti hatası:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Müşteri ödenmemiş faturalar özeti getirilirken bir hata oluştu'
+            });
+        }
+    }
+    static async getCustomerPaidInvoicesSummary(req, res) {
+        try {
+            const { customerId } = req.params;
+            const userId = req.user.id;
+            const customer = await prisma.customer.findFirst({
+                where: {
+                    id: customerId,
+                    userId: userId
+                }
+            });
+            if (!customer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Müşteri bulunamadı'
+                });
+            }
+            const allInvoices = await prisma.extractTransaction.findMany({
+                where: {
+                    customerId: customerId,
+                    extract: {
+                        userId: userId
+                    },
+                    debit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Fatura', 'FATURA', 'fatura']
+                    }
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            });
+            const allPayments = await prisma.extractTransaction.findMany({
+                where: {
+                    customerId: customerId,
+                    extract: {
+                        userId: userId
+                    },
+                    credit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme']
+                    }
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            });
+            const paidInvoices = [];
+            const sortedInvoices = [...allInvoices].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const sortedPayments = [...allPayments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            let remainingPayments = [...sortedPayments];
+            for (const invoice of sortedInvoices) {
+                let remainingInvoiceAmount = invoice.debit;
+                const paymentsForThisInvoice = [];
+                for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+                    const payment = remainingPayments[i];
+                    const availablePaymentAmount = payment.credit;
+                    const paymentAmount = Math.min(availablePaymentAmount, remainingInvoiceAmount);
+                    paymentsForThisInvoice.push({
+                        ...payment,
+                        appliedAmount: paymentAmount,
+                        paymentDate: payment.date
+                    });
+                    remainingInvoiceAmount -= paymentAmount;
+                    payment.credit -= paymentAmount;
+                    if (payment.credit <= 0) {
+                        remainingPayments.splice(i, 1);
+                        i--;
+                    }
+                }
+                if (paymentsForThisInvoice.length > 0) {
+                    const totalPaid = invoice.debit - remainingInvoiceAmount;
+                    const paidPercentage = (totalPaid / invoice.debit) * 100;
+                    if (remainingInvoiceAmount <= 0) {
+                        paidInvoices.push({
+                            ...invoice,
+                            amount: invoice.debit,
+                            paidAmount: totalPaid,
+                            remainingAmount: 0,
+                            paidPercentage: 100,
+                            isFullyPaid: true,
+                            payments: paymentsForThisInvoice,
+                            lastPaymentDate: paymentsForThisInvoice[paymentsForThisInvoice.length - 1].paymentDate,
+                            paymentMethod: paymentsForThisInvoice[0].documentType || 'Nakit'
+                        });
+                    }
+                }
+            }
+            const summary = {
+                totalPaidInvoices: paidInvoices.length,
+                totalAmount: paidInvoices.reduce((sum, inv) => sum + inv.amount, 0),
+                averagePayment: paidInvoices.length > 0 ? paidInvoices.reduce((sum, inv) => sum + inv.amount, 0) / paidInvoices.length : 0,
+                lastPaymentDate: paidInvoices.length > 0 ? paidInvoices[paidInvoices.length - 1].lastPaymentDate : null,
+                paymentMethods: {
+                    cash: paidInvoices.filter(p => p.paymentMethod === 'Nakit').length,
+                    bank: paidInvoices.filter(p => p.paymentMethod === 'Banka').length,
+                    check: paidInvoices.filter(p => p.paymentMethod === 'Çek').length,
+                    other: paidInvoices.filter(p => !['Nakit', 'Banka', 'Çek'].includes(p.paymentMethod)).length
+                }
+            };
+            return res.json({
+                success: true,
+                data: {
+                    customer: {
+                        id: customer.id,
+                        name: customer.name,
+                        code: customer.code,
+                        phone: customer.phone
+                    },
+                    payments: paidInvoices,
+                    summary
+                }
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Müşteri ödenmiş faturalar özeti hatası:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Müşteri ödenmiş faturalar özeti getirilirken bir hata oluştu'
+            });
+        }
+    }
+    static async getCustomerPaymentPerformance(req, res) {
+        try {
+            const { startDate, endDate } = req.query;
+            const userId = req.user.id;
+            const dateFilter = {};
+            if (startDate) {
+                dateFilter.gte = new Date(startDate);
+            }
+            if (endDate) {
+                dateFilter.lte = new Date(endDate);
+            }
+            const transactions = await prisma.extractTransaction.findMany({
+                where: {
+                    extract: { userId },
+                    date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
+                },
+                include: {
+                    customer: {
+                        select: { id: true, name: true, code: true }
+                    }
+                },
+                orderBy: { date: 'asc' }
+            });
+            const customerMap = new Map();
+            transactions.forEach(tx => {
+                if (!tx.customerId || !tx.customer)
+                    return;
+                if (!customerMap.has(tx.customerId)) {
+                    customerMap.set(tx.customerId, {
+                        customer: tx.customer,
+                        invoices: [],
+                        payments: []
+                    });
+                }
+                const entry = customerMap.get(tx.customerId);
+                if (tx.debit > 0) {
+                    entry.invoices.push({ ...tx, remaining: tx.debit });
+                }
+                else if (tx.credit > 0) {
+                    entry.payments.push(tx);
+                }
+            });
+            const result = [];
+            customerMap.forEach((value) => {
+                const { customer, invoices, payments } = value;
+                invoices.sort((a, b) => a.date.getTime() - b.date.getTime());
+                payments.sort((a, b) => a.date.getTime() - b.date.getTime());
+                payments.forEach((payment) => {
+                    let remaining = payment.credit;
+                    for (const invoice of invoices) {
+                        if (remaining <= 0)
+                            break;
+                        if (invoice.remaining > 0) {
+                            const applyAmount = Math.min(invoice.remaining, remaining);
+                            invoice.remaining -= applyAmount;
+                            remaining -= applyAmount;
+                            if (invoice.remaining === 0) {
+                                invoice.paidDate = payment.date;
+                            }
+                        }
+                    }
+                });
+                let totalDays = 0;
+                let paidCount = 0;
+                let lateCount = 0;
+                invoices.forEach((inv) => {
+                    if (inv.paidDate) {
+                        const diffDays = Math.ceil((inv.paidDate.getTime() - inv.date.getTime()) / (1000 * 60 * 60 * 24));
+                        totalDays += diffDays;
+                        paidCount++;
+                        if (inv.dueDate && inv.paidDate > inv.dueDate) {
+                            lateCount++;
+                        }
+                    }
+                });
+                const averagePaymentDays = paidCount > 0 ? totalDays / paidCount : 0;
+                const lateInvoicePercentage = paidCount > 0 ? (lateCount / paidCount) * 100 : 0;
+                result.push({
+                    customer: {
+                        id: customer.id,
+                        name: customer.name,
+                        code: customer.code
+                    },
+                    totalInvoices: invoices.length,
+                    paidInvoices: paidCount,
+                    averagePaymentDays,
+                    lateInvoicePercentage
+                });
+            });
+            res.json({
+                success: true,
+                data: result
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Müşteri ödeme performansı raporu hatası:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Müşteri ödeme performansı raporu getirilirken bir hata oluştu'
+            });
+        }
+    }
+    static async debugFifoCalculation(req, res) {
+        try {
+            const { customerId } = req.query;
+            const userId = req.user.id;
+            const customerFilter = customerId ? { customerId: customerId } : {};
+            const allInvoices = await prisma.extractTransaction.findMany({
+                where: {
+                    ...customerFilter,
+                    extract: {
+                        userId: userId
+                    },
+                    debit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Fatura', 'FATURA', 'fatura']
+                    }
+                },
+                include: {
+                    customer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true
+                        }
+                    }
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            });
+            const allPayments = await prisma.extractTransaction.findMany({
+                where: {
+                    ...customerFilter,
+                    extract: {
+                        userId: userId
+                    },
+                    credit: {
+                        gt: 0
+                    },
+                    documentType: {
+                        in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme']
+                    }
+                },
+                include: {
+                    customer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true
+                        }
+                    }
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            });
+            const customerGroups = new Map();
+            for (const invoice of allInvoices) {
+                const customerId = invoice.customerId;
+                if (!customerGroups.has(customerId)) {
+                    customerGroups.set(customerId, {
+                        customer: invoice.customer,
+                        invoices: [],
+                        payments: []
+                    });
+                }
+                customerGroups.get(customerId).invoices.push(invoice);
+            }
+            for (const payment of allPayments) {
+                const customerId = payment.customerId;
+                if (!customerGroups.has(customerId)) {
+                    customerGroups.set(customerId, {
+                        customer: payment.customer,
+                        invoices: [],
+                        payments: []
+                    });
+                }
+                customerGroups.get(customerId).payments.push(payment);
+            }
+            const debugResults = [];
+            for (const [customerId, group] of customerGroups) {
+                const { customer, invoices, payments } = group;
+                invoices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                payments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                let remainingPayments = [...payments];
+                const customerResult = {
+                    customer: customer,
+                    invoices: invoices,
+                    payments: payments,
+                    fifoCalculation: []
+                };
+                for (const invoice of invoices) {
+                    let remainingInvoiceAmount = invoice.debit;
+                    const paymentsForThisInvoice = [];
+                    for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+                        const payment = remainingPayments[i];
+                        const availablePaymentAmount = payment.credit;
+                        const paymentAmount = Math.min(availablePaymentAmount, remainingInvoiceAmount);
+                        paymentsForThisInvoice.push({
+                            paymentId: payment.id,
+                            paymentDate: payment.date,
+                            paymentAmount: paymentAmount,
+                            originalPaymentAmount: availablePaymentAmount,
+                            description: payment.description
+                        });
+                        remainingInvoiceAmount -= paymentAmount;
+                        payment.credit -= paymentAmount;
+                        if (payment.credit <= 0) {
+                            remainingPayments.splice(i, 1);
+                            i--;
+                        }
+                    }
+                    const totalPaid = invoice.debit - remainingInvoiceAmount;
+                    const isFullyPaid = remainingInvoiceAmount <= 0;
+                    customerResult.fifoCalculation.push({
+                        invoiceId: invoice.id,
+                        invoiceDate: invoice.date,
+                        invoiceAmount: invoice.debit,
+                        totalPaid: totalPaid,
+                        remainingAmount: remainingInvoiceAmount,
+                        isFullyPaid: isFullyPaid,
+                        payments: paymentsForThisInvoice
+                    });
+                }
+                debugResults.push(customerResult);
+            }
+            res.json({
+                success: true,
+                data: {
+                    debugResults,
+                    summary: {
+                        totalCustomers: debugResults.length,
+                        totalInvoices: allInvoices.length,
+                        totalPayments: allPayments.length
+                    }
+                }
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('FIFO debug hatası:', error);
+            res.status(500).json({
+                success: false,
+                message: 'FIFO debug hatası'
+            });
+        }
+    }
 }
 exports.ReportController = ReportController;
 //# sourceMappingURL=controller.js.map

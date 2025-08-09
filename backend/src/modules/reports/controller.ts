@@ -877,6 +877,9 @@ export class ReportController {
         },
         debit: {
           gt: 0 // Sadece borç işlemleri (fatura)
+        },
+        documentType: {
+          in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
         }
       };
 
@@ -1040,7 +1043,7 @@ export class ReportController {
         }
       }
 
-      // 1. Önce tüm borç işlemlerini (faturalar) getir
+      // 1. Önce tüm satış faturalarını getir (sadece Fatura belge türü)
       const allInvoices = await prisma.extractTransaction.findMany({
         where: {
           ...customerFilter,
@@ -1049,6 +1052,9 @@ export class ReportController {
           },
           debit: {
             gt: 0
+          },
+          documentType: {
+            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
           },
           date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
         },
@@ -1077,6 +1083,9 @@ export class ReportController {
           credit: {
             gt: 0
           },
+          documentType: {
+            in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme'] // Sadece ödeme işlemleri
+          },
           date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
         },
         include: {
@@ -1096,57 +1105,92 @@ export class ReportController {
 
       // 3. FIFO mantığı ile ödenmiş faturaları hesapla
       const paidInvoices: any[] = [];
-      const remainingPayments = [...allPayments];
-
+      
+      // Müşteri bazında grupla
+      const customerGroups = new Map();
+      
+      // Faturaları müşteri bazında grupla
       for (const invoice of allInvoices) {
-        let remainingInvoiceAmount = invoice.debit;
-        const paymentsForThisInvoice: any[] = [];
+        const customerId = invoice.customerId;
+        if (!customerGroups.has(customerId)) {
+          customerGroups.set(customerId, {
+            invoices: [],
+            payments: []
+          });
+        }
+        customerGroups.get(customerId).invoices.push(invoice);
+      }
+      
+      // Ödemeleri müşteri bazında grupla
+      for (const payment of allPayments) {
+        const customerId = payment.customerId;
+        if (!customerGroups.has(customerId)) {
+          customerGroups.set(customerId, {
+            invoices: [],
+            payments: []
+          });
+        }
+        customerGroups.get(customerId).payments.push(payment);
+      }
 
-        // Bu fatura için ödeme arayalım
-        for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
-          const payment = remainingPayments[i];
+      // Her müşteri için FIFO hesaplaması yap
+      for (const [customerId, group] of customerGroups) {
+        const { invoices, payments } = group;
+        
+        // Faturaları tarihe göre sırala (eski önce)
+        invoices.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        // Ödemeleri tarihe göre sırala (eski önce)
+        payments.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        let remainingPayments = [...payments];
+        
+        for (const invoice of invoices) {
+          let remainingInvoiceAmount = invoice.debit;
+          const paymentsForThisInvoice: any[] = [];
           
-          // Aynı müşteriye ait ödeme mi?
-          if (payment.customerId === invoice.customerId) {
-            const paymentAmount = Math.min(payment.credit, remainingInvoiceAmount);
+          // Bu fatura için ödeme arayalım
+          for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+            const payment = remainingPayments[i];
+            const availablePaymentAmount = payment.credit;
+            const paymentAmount = Math.min(availablePaymentAmount, remainingInvoiceAmount);
             
             paymentsForThisInvoice.push({
               ...payment,
               appliedAmount: paymentAmount,
               paymentDate: payment.date
             });
-
+            
             remainingInvoiceAmount -= paymentAmount;
             payment.credit -= paymentAmount;
-
+            
             // Eğer ödeme tamamen kullanıldıysa listeden çıkar
             if (payment.credit <= 0) {
               remainingPayments.splice(i, 1);
               i--; // Index'i düzelt
             }
           }
-        }
-
-        // Eğer bu fatura için ödeme yapılmışsa
-        if (paymentsForThisInvoice.length > 0) {
-          const totalPaid = invoice.debit - remainingInvoiceAmount;
-          const paidPercentage = (totalPaid / invoice.debit) * 100;
-
-          // Tamamen ödenmiş faturalar
-          if (remainingInvoiceAmount <= 0) {
-            paidInvoices.push({
-              ...invoice,
-              amount: invoice.debit,
-              paidAmount: totalPaid,
-              remainingAmount: 0,
-              paidPercentage: 100,
-              isFullyPaid: true,
-              payments: paymentsForThisInvoice,
-              lastPaymentDate: paymentsForThisInvoice[paymentsForThisInvoice.length - 1].paymentDate,
-              paymentMethod: paymentsForThisInvoice[0].documentType || 'Nakit'
-            });
+          
+          // Eğer bu fatura için ödeme yapılmışsa
+          if (paymentsForThisInvoice.length > 0) {
+            const totalPaid = invoice.debit - remainingInvoiceAmount;
+            const paidPercentage = (totalPaid / invoice.debit) * 100;
+            
+            // Tamamen ödenmiş faturalar
+            if (remainingInvoiceAmount <= 0) {
+              paidInvoices.push({
+                ...invoice,
+                amount: invoice.debit,
+                paidAmount: totalPaid,
+                remainingAmount: 0,
+                paidPercentage: 100,
+                isFullyPaid: true,
+                payments: paymentsForThisInvoice,
+                lastPaymentDate: paymentsForThisInvoice[paymentsForThisInvoice.length - 1].paymentDate,
+                paymentMethod: paymentsForThisInvoice[0].documentType || 'Nakit'
+              });
+            }
           }
-          // Kısmen ödenmiş faturalar (opsiyonel - şimdilik sadece tamamen ödenmişleri göster)
         }
       }
 
@@ -1225,7 +1269,7 @@ export class ReportController {
         });
       }
 
-      // Müşterinin ödenmemiş faturalarını getir
+      // Müşterinin ödenmemiş satış faturalarını getir
       const unpaidInvoices = await prisma.extractTransaction.findMany({
         where: {
           customerId: customerId,
@@ -1234,6 +1278,9 @@ export class ReportController {
           },
           debit: {
             gt: 0
+          },
+          documentType: {
+            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
           }
         },
         include: {
@@ -1279,7 +1326,7 @@ export class ReportController {
           : 0
       };
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           customer,
@@ -1290,7 +1337,7 @@ export class ReportController {
 
     } catch (error) {
       logError('Müşteri ödenmemiş faturalar özeti hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri ödenmemiş faturalar özeti getirilirken bir hata oluştu'
       });
@@ -1318,7 +1365,7 @@ export class ReportController {
         });
       }
 
-      // 1. Müşterinin tüm borç işlemlerini (faturalar) getir
+      // 1. Müşterinin tüm satış faturalarını getir (sadece Fatura belge türü)
       const allInvoices = await prisma.extractTransaction.findMany({
         where: {
           customerId: customerId,
@@ -1327,6 +1374,9 @@ export class ReportController {
           },
           debit: {
             gt: 0
+          },
+          documentType: {
+            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
           }
         },
         orderBy: {
@@ -1343,6 +1393,9 @@ export class ReportController {
           },
           credit: {
             gt: 0
+          },
+          documentType: {
+            in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme'] // Sadece ödeme işlemleri
           }
         },
         orderBy: {
@@ -1352,16 +1405,28 @@ export class ReportController {
 
       // 3. FIFO mantığı ile ödenmiş faturaları hesapla
       const paidInvoices: any[] = [];
-      const remainingPayments = [...allPayments];
+      
+      // Faturaları tarihe göre sırala (eski önce)
+      const sortedInvoices = [...allInvoices].sort((a: any, b: any) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      
+      // Ödemeleri tarihe göre sırala (eski önce)
+      const sortedPayments = [...allPayments].sort((a: any, b: any) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      
+      let remainingPayments = [...sortedPayments];
 
-      for (const invoice of allInvoices) {
+      for (const invoice of sortedInvoices) {
         let remainingInvoiceAmount = invoice.debit;
         const paymentsForThisInvoice: any[] = [];
 
         // Bu fatura için ödeme arayalım
         for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
           const payment = remainingPayments[i];
-          const paymentAmount = Math.min(payment.credit, remainingInvoiceAmount);
+          const availablePaymentAmount = payment.credit;
+          const paymentAmount = Math.min(availablePaymentAmount, remainingInvoiceAmount);
           
           paymentsForThisInvoice.push({
             ...payment,
@@ -1415,7 +1480,7 @@ export class ReportController {
         }
       };
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           customer: {
@@ -1431,7 +1496,7 @@ export class ReportController {
 
     } catch (error) {
       logError('Müşteri ödenmiş faturalar özeti hatası:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Müşteri ödenmiş faturalar özeti getirilirken bir hata oluştu'
       });
@@ -1547,6 +1612,186 @@ export class ReportController {
       res.status(500).json({
         success: false,
         message: 'Müşteri ödeme performansı raporu getirilirken bir hata oluştu'
+      });
+    }
+  }
+
+  // Debug: FIFO hesaplamasını test et
+  static async debugFifoCalculation(req: Request, res: Response) {
+    try {
+      const { customerId } = req.query;
+      const userId = (req as any).user.id;
+
+      // Müşteri filtresi
+      const customerFilter = customerId ? { customerId: customerId as string } : {};
+
+      // Tüm satış faturalarını getir (sadece Fatura belge türü)
+      const allInvoices = await prisma.extractTransaction.findMany({
+        where: {
+          ...customerFilter,
+          extract: {
+            userId: userId
+          },
+          debit: {
+            gt: 0
+          },
+          documentType: {
+            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
+          }
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          }
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      });
+
+      // Tüm alacak işlemlerini getir (sadece ödeme işlemleri)
+      const allPayments = await prisma.extractTransaction.findMany({
+        where: {
+          ...customerFilter,
+          extract: {
+            userId: userId
+          },
+          credit: {
+            gt: 0
+          },
+          documentType: {
+            in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme'] // Sadece ödeme işlemleri
+          }
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          }
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      });
+
+      // Müşteri bazında grupla
+      const customerGroups = new Map();
+      
+      // Faturaları müşteri bazında grupla
+      for (const invoice of allInvoices) {
+        const customerId = invoice.customerId;
+        if (!customerGroups.has(customerId)) {
+          customerGroups.set(customerId, {
+            customer: invoice.customer,
+            invoices: [],
+            payments: []
+          });
+        }
+        customerGroups.get(customerId).invoices.push(invoice);
+      }
+      
+      // Ödemeleri müşteri bazında grupla
+      for (const payment of allPayments) {
+        const customerId = payment.customerId;
+        if (!customerGroups.has(customerId)) {
+          customerGroups.set(customerId, {
+            customer: payment.customer,
+            invoices: [],
+            payments: []
+          });
+        }
+        customerGroups.get(customerId).payments.push(payment);
+      }
+
+      const debugResults = [];
+
+      // Her müşteri için FIFO hesaplaması yap
+      for (const [customerId, group] of customerGroups) {
+        const { customer, invoices, payments } = group;
+        
+        // Faturaları tarihe göre sırala
+        invoices.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        // Ödemeleri tarihe göre sırala
+        payments.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        let remainingPayments = [...payments];
+        const customerResult = {
+          customer: customer,
+          invoices: invoices,
+          payments: payments,
+          fifoCalculation: [] as any[]
+        };
+        
+        for (const invoice of invoices) {
+          let remainingInvoiceAmount = invoice.debit;
+          const paymentsForThisInvoice: any[] = [];
+          
+          // Bu fatura için ödeme arayalım
+          for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+            const payment = remainingPayments[i];
+            const availablePaymentAmount = payment.credit;
+            const paymentAmount = Math.min(availablePaymentAmount, remainingInvoiceAmount);
+            
+            paymentsForThisInvoice.push({
+              paymentId: payment.id,
+              paymentDate: payment.date,
+              paymentAmount: paymentAmount,
+              originalPaymentAmount: availablePaymentAmount,
+              description: payment.description
+            });
+            
+            remainingInvoiceAmount -= paymentAmount;
+            payment.credit -= paymentAmount;
+            
+            // Eğer ödeme tamamen kullanıldıysa listeden çıkar
+            if (payment.credit <= 0) {
+              remainingPayments.splice(i, 1);
+              i--;
+            }
+          }
+          
+          const totalPaid = invoice.debit - remainingInvoiceAmount;
+          const isFullyPaid = remainingInvoiceAmount <= 0;
+          
+          customerResult.fifoCalculation.push({
+            invoiceId: invoice.id,
+            invoiceDate: invoice.date,
+            invoiceAmount: invoice.debit,
+            totalPaid: totalPaid,
+            remainingAmount: remainingInvoiceAmount,
+            isFullyPaid: isFullyPaid,
+            payments: paymentsForThisInvoice
+          });
+        }
+        
+        debugResults.push(customerResult);
+      }
+
+      res.json({
+        success: true,
+        data: {
+          debugResults,
+          summary: {
+            totalCustomers: debugResults.length,
+            totalInvoices: allInvoices.length,
+            totalPayments: allPayments.length
+          }
+        }
+      });
+
+    } catch (error) {
+      logError('FIFO debug hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'FIFO debug hatası'
       });
     }
   }

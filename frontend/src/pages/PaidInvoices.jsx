@@ -316,8 +316,13 @@ const PaidInvoices = () => {
                       </td>
                       <td className="table-cell">
                         <div className="max-w-xs truncate" title={invoice.description}>
-                          {invoice.description}
+                          {invoice.description || 'Açıklama yok'}
                         </div>
+                        {invoice.payments?.length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1 max-w-xs truncate" title={invoice.payments[invoice.payments.length - 1]?.description}>
+                            Son ödeme: {invoice.payments[invoice.payments.length - 1]?.description || '-'}
+                          </div>
+                        )}
                         {invoice.voucherNo && (
                           <div className="text-sm text-gray-500">
                             Evrak: {invoice.voucherNo}

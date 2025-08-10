@@ -348,15 +348,20 @@ const CustomerDetail = () => {
                       <tbody>
                         {paidInvoices.payments.slice(0, 10).map((payment) => (
                           <tr key={payment.id}>
-                            <td>{formatDate(payment.paymentDate)}</td>
+                            <td>{formatDate(payment.lastPaymentDate)}</td>
                             <td className="font-medium text-success-600">{formatCurrency(payment.amount)}</td>
                             <td>
                               <span className="badge badge-success">{payment.paymentMethod}</span>
                             </td>
                             <td>
                               <div className="max-w-xs truncate" title={payment.description}>
-                                {payment.description}
+                                {payment.description || 'Açıklama yok'}
                               </div>
+                              {payment.payments?.length > 0 && (
+                                <div className="text-xs text-gray-500 mt-1 max-w-xs truncate" title={payment.payments[payment.payments.length - 1]?.description}>
+                                  Son ödeme: {payment.payments[payment.payments.length - 1]?.description || '-'}
+                                </div>
+                              )}
                               {payment.voucherNo && (
                                 <div className="text-xs text-gray-500">Evrak: {payment.voucherNo}</div>
                               )}

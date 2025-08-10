@@ -877,9 +877,6 @@ export class ReportController {
         },
         debit: {
           gt: 0 // Sadece borç işlemleri (fatura)
-        },
-        documentType: {
-          in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
         }
       };
 
@@ -1053,9 +1050,6 @@ export class ReportController {
           debit: {
             gt: 0
           },
-          documentType: {
-            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
-          },
           date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
         },
         include: {
@@ -1082,9 +1076,6 @@ export class ReportController {
           },
           credit: {
             gt: 0
-          },
-          documentType: {
-            in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme'] // Sadece ödeme işlemleri
           },
           date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
         },
@@ -1137,10 +1128,10 @@ export class ReportController {
       for (const [customerId, group] of customerGroups) {
         const { invoices, payments } = group;
         
-        // Faturaları tarihe göre sırala (eski önce)
+        // Faturaları tarihe göre sırala (eski önce) - FIFO için önemli
         invoices.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
-        // Ödemeleri tarihe göre sırala (eski önce)
+        // Ödemeleri tarihe göre sırala (eski önce) - FIFO için önemli
         payments.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
         let remainingPayments = [...payments];
@@ -1278,9 +1269,6 @@ export class ReportController {
           },
           debit: {
             gt: 0
-          },
-          documentType: {
-            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
           }
         },
         include: {
@@ -1374,9 +1362,6 @@ export class ReportController {
           },
           debit: {
             gt: 0
-          },
-          documentType: {
-            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
           }
         },
         orderBy: {
@@ -1393,9 +1378,6 @@ export class ReportController {
           },
           credit: {
             gt: 0
-          },
-          documentType: {
-            in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme'] // Sadece ödeme işlemleri
           }
         },
         orderBy: {
@@ -1406,12 +1388,12 @@ export class ReportController {
       // 3. FIFO mantığı ile ödenmiş faturaları hesapla
       const paidInvoices: any[] = [];
       
-      // Faturaları tarihe göre sırala (eski önce)
+      // Faturaları tarihe göre sırala (eski önce) - FIFO için önemli
       const sortedInvoices = [...allInvoices].sort((a: any, b: any) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
-      // Ödemeleri tarihe göre sırala (eski önce)
+      // Ödemeleri tarihe göre sırala (eski önce) - FIFO için önemli
       const sortedPayments = [...allPayments].sort((a: any, b: any) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
@@ -1634,9 +1616,6 @@ export class ReportController {
           },
           debit: {
             gt: 0
-          },
-          documentType: {
-            in: ['Fatura', 'FATURA', 'fatura'] // Sadece satış faturaları
           }
         },
         include: {
@@ -1662,9 +1641,6 @@ export class ReportController {
           },
           credit: {
             gt: 0
-          },
-          documentType: {
-            in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme'] // Sadece ödeme işlemleri
           }
         },
         include: {

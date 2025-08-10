@@ -725,9 +725,6 @@ class ReportController {
                 },
                 debit: {
                     gt: 0
-                },
-                documentType: {
-                    in: ['Fatura', 'FATURA', 'fatura']
                 }
             };
             if (customerId) {
@@ -868,9 +865,6 @@ class ReportController {
                     debit: {
                         gt: 0
                     },
-                    documentType: {
-                        in: ['Fatura', 'FATURA', 'fatura']
-                    },
                     date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
                 },
                 include: {
@@ -895,9 +889,6 @@ class ReportController {
                     },
                     credit: {
                         gt: 0
-                    },
-                    documentType: {
-                        in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme']
                     },
                     date: Object.keys(dateFilter).length > 0 ? dateFilter : undefined
                 },
@@ -1052,9 +1043,6 @@ class ReportController {
                     },
                     debit: {
                         gt: 0
-                    },
-                    documentType: {
-                        in: ['Fatura', 'FATURA', 'fatura']
                     }
                 },
                 include: {
@@ -1134,9 +1122,6 @@ class ReportController {
                     },
                     debit: {
                         gt: 0
-                    },
-                    documentType: {
-                        in: ['Fatura', 'FATURA', 'fatura']
                     }
                 },
                 orderBy: {
@@ -1151,9 +1136,6 @@ class ReportController {
                     },
                     credit: {
                         gt: 0
-                    },
-                    documentType: {
-                        in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme']
                     }
                 },
                 orderBy: {
@@ -1350,9 +1332,6 @@ class ReportController {
                     },
                     debit: {
                         gt: 0
-                    },
-                    documentType: {
-                        in: ['Fatura', 'FATURA', 'fatura']
                     }
                 },
                 include: {
@@ -1376,9 +1355,6 @@ class ReportController {
                     },
                     credit: {
                         gt: 0
-                    },
-                    documentType: {
-                        in: ['Tahsilat', 'TAHSİLAT', 'tahsilat', 'Ödeme', 'ÖDEME', 'ödeme']
                     }
                 },
                 include: {

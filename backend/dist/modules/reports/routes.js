@@ -79,6 +79,7 @@ router.get('/paid-invoices', auth_1.authMiddleware, [
 ], controller_1.ReportController.getPaidInvoices);
 router.get('/customer/:customerId/unpaid-invoices', auth_1.authMiddleware, controller_1.ReportController.getCustomerUnpaidInvoicesSummary);
 router.get('/customer/:customerId/paid-invoices', auth_1.authMiddleware, controller_1.ReportController.getCustomerPaidInvoicesSummary);
+router.get('/customer/:customerId/payments', auth_1.authMiddleware, controller_1.ReportController.getCustomerPayments);
 router.get('/debug-fifo', auth_1.authMiddleware, controller_1.ReportController.debugFifoCalculation);
 exports.default = router;
 //# sourceMappingURL=routes.js.map

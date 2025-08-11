@@ -17,6 +17,7 @@ export declare class ReportController {
     static getPaidInvoices(req: Request, res: Response): Promise<void>;
     static getCustomerUnpaidInvoicesSummary(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     static getCustomerPaidInvoicesSummary(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    static getCustomerPayments(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     static getCustomerPaymentPerformance(req: Request, res: Response): Promise<void>;
     static debugFifoCalculation(req: Request, res: Response): Promise<void>;
 }

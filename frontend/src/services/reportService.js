@@ -56,6 +56,11 @@ const reportService = {
     return apiClient.get(`/reports/customer/${customerId}/paid-invoices`)
   },
 
+  // Müşteri ödemeleri listesi
+  getCustomerPayments: (customerId) => {
+    return apiClient.get(`/reports/customer/${customerId}/payments`)
+  },
+
   // FIFO hesaplama debug raporu
   getDebugFifo: (params = '') => {
     return apiClient.get(`/reports/debug-fifo?${params}`)

@@ -288,7 +288,7 @@ const PaidInvoices = () => {
                     <th className="table-header-cell">Son Ödeme Tarihi</th>
                     <th className="table-header-cell">Fatura Tutarı</th>
                     <th className="table-header-cell">Ödeme Yöntemi</th>
-                    <th className="table-header-cell">Açıklama</th>
+                    <th className="table-header-cell">İşlemler</th>
                     <th className="table-header-cell">İşlemler</th>
                   </tr>
                 </thead>
@@ -314,24 +314,7 @@ const PaidInvoices = () => {
                       <td className="table-cell">
                         {getPaymentMethodBadge(invoice.paymentMethod)}
                       </td>
-                      <td className="table-cell">
-                        <div className="max-w-xs truncate" title={invoice.description}>
-                          {invoice.description || 'Açıklama yok'}
-                        </div>
-                        {invoice.payments?.length > 0 && (
-                          <div className="text-xs text-gray-500 mt-1 max-w-xs truncate" title={invoice.payments[invoice.payments.length - 1]?.description}>
-                            Son ödeme: {invoice.payments[invoice.payments.length - 1]?.description || '-'}
-                          </div>
-                        )}
-                        {invoice.voucherNo && (
-                          <div className="text-sm text-gray-500">
-                            Evrak: {invoice.voucherNo}
-                          </div>
-                        )}
-                        <div className="text-xs text-green-600 mt-1">
-                          {invoice.payments?.length || 0} ödeme ile tamamlandı
-                        </div>
-                      </td>
+
                       <td className="table-cell">
                         <div className="flex gap-2">
                           <button 

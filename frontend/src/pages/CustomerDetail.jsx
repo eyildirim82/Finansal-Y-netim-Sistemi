@@ -10,10 +10,11 @@ const CustomerDetail = () => {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [unpaidInvoices, setUnpaidInvoices] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
-  const [paidInvoices, setPaidInvoices] = useState(null);
-  const [loadingPaidInvoices, setLoadingPaidInvoices] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [summary, setSummary] = useState(null);
 
   useEffect(() => {
     const fetchCustomer = async () => {
@@ -30,40 +31,80 @@ const CustomerDetail = () => {
     fetchCustomer();
   }, [id]);
 
-  // Ödenmemiş faturaları yükle
+  // Tüm faturaları yükle
   useEffect(() => {
-    const fetchUnpaidInvoices = async () => {
+    const fetchAllInvoices = async () => {
       if (!customer) return;
       
       try {
         setLoadingInvoices(true);
-        const res = await reportService.getCustomerUnpaidInvoicesSummary(id);
-        setUnpaidInvoices(res.data.data);
+        
+        // Ödenmemiş faturaları al
+        const unpaidRes = await reportService.getCustomerUnpaidInvoicesSummary(id);
+        const unpaidData = unpaidRes.data.data;
+        
+        // Ödenmiş faturaları al
+        const paidRes = await reportService.getCustomerPaidInvoicesSummary(id);
+        const paidData = paidRes.data.data;
+        
+        // Faturaları birleştir
+        const allInvoices = [
+          ...unpaidData.invoices.map(invoice => ({
+            ...invoice,
+            status: 'unpaid',
+            isOverdue: invoice.isOverdue || false,
+            overdueDays: invoice.overdueDays || 0
+          })),
+          ...paidData.payments.map(invoice => ({
+            ...invoice,
+            status: 'paid',
+            lastPaymentDate: invoice.lastPaymentDate,
+            paymentMethod: invoice.paymentMethod
+          }))
+        ];
+        
+        // Tarihe göre sırala (en yeni önce)
+        allInvoices.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        setInvoices(allInvoices);
+        
+        // Özet bilgileri
+        setSummary({
+          totalInvoices: allInvoices.length,
+          unpaidInvoices: unpaidData.invoices.length,
+          paidInvoices: paidData.payments.length,
+          totalUnpaidAmount: unpaidData.summary.totalAmount,
+          totalPaidAmount: paidData.summary.totalAmount,
+          overdueInvoices: unpaidData.summary.overdueInvoices,
+          overdueAmount: unpaidData.summary.overdueAmount,
+          lastPaymentDate: paidData.summary.lastPaymentDate
+        });
+        
       } catch (err) {
-        console.error('Ödenmemiş faturalar yüklenirken hata:', err);
+        console.error('Faturalar yüklenirken hata:', err);
       } finally {
         setLoadingInvoices(false);
       }
     };
-    fetchUnpaidInvoices();
+    fetchAllInvoices();
   }, [id, customer]);
 
-  // Ödenmiş faturaları yükle
+  // Ödemeleri yükle
   useEffect(() => {
-    const fetchPaidInvoices = async () => {
+    const fetchPayments = async () => {
       if (!customer) return;
       
       try {
-        setLoadingPaidInvoices(true);
-        const res = await reportService.getCustomerPaidInvoicesSummary(id);
-        setPaidInvoices(res.data.data);
+        setLoadingPayments(true);
+        const res = await reportService.getCustomerPayments(id);
+        setPayments(res.data.data.payments);
       } catch (err) {
-        console.error('Ödenmiş faturalar yüklenirken hata:', err);
+        console.error('Ödemeler yüklenirken hata:', err);
       } finally {
-        setLoadingPaidInvoices(false);
+        setLoadingPayments(false);
       }
     };
-    fetchPaidInvoices();
+    fetchPayments();
   }, [id, customer]);
 
   const formatCurrency = (amount) => {
@@ -75,6 +116,60 @@ const CustomerDetail = () => {
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('tr-TR');
+  };
+
+  const getStatusBadge = (invoice) => {
+    // Belge türüne göre durum belirleme
+    if (invoice.documentType) {
+      const docType = invoice.documentType.toLowerCase();
+      
+      // İade faturası kontrolü
+      if (docType.includes('iade') || docType.includes('return') || docType.includes('red')) {
+        return <span className="badge badge-info">İade</span>;
+      }
+      
+      // Devir fişi kontrolü
+      if (docType.includes('devir') && docType.includes('fiş')) {
+        if (invoice.status === 'paid') {
+          return <span className="badge badge-success">Devir Fişi (Ödenmiş)</span>;
+        } else if (invoice.isOverdue) {
+          return <span className="badge badge-error">Devir Fişi ({invoice.overdueDays} gün gecikmiş)</span>;
+        } else {
+          return <span className="badge badge-warning">Devir Fişi (Ödenmemiş)</span>;
+        }
+      }
+      
+      // Satış faturası kontrolü
+      if (docType.includes('satış') || docType.includes('sales')) {
+        if (invoice.status === 'paid') {
+          return <span className="badge badge-success">Satış Faturası (Ödenmiş)</span>;
+        } else if (invoice.isOverdue) {
+          return <span className="badge badge-error">Satış Faturası ({invoice.overdueDays} gün gecikmiş)</span>;
+        } else {
+          return <span className="badge badge-warning">Satış Faturası (Ödenmemiş)</span>;
+        }
+      }
+      
+      // Normal fatura kontrolü
+      if (docType.includes('fatura') || docType.includes('invoice')) {
+        if (invoice.status === 'paid') {
+          return <span className="badge badge-success">Fatura (Ödenmiş)</span>;
+        } else if (invoice.isOverdue) {
+          return <span className="badge badge-error">Fatura ({invoice.overdueDays} gün gecikmiş)</span>;
+        } else {
+          return <span className="badge badge-warning">Fatura (Ödenmemiş)</span>;
+        }
+      }
+    }
+    
+    // Genel durum kontrolü (belge türü belirsizse)
+    if (invoice.status === 'paid') {
+      return <span className="badge badge-success">Ödenmiş</span>;
+    } else if (invoice.isOverdue) {
+      return <span className="badge badge-error">{invoice.overdueDays} gün gecikmiş</span>;
+    } else {
+      return <span className="badge badge-warning">Ödenmemiş</span>;
+    }
   };
 
   if (loading) {
@@ -163,232 +258,175 @@ const CustomerDetail = () => {
                   {customer.isActive ? 'Aktif' : 'Pasif'}
                 </span>
               </div>
+              {summary && (
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-gray-600 font-medium">Ödenmemiş Fatura Toplamı</span>
+                  <span className="text-lg font-bold text-red-600">{formatCurrency(summary.totalUnpaidAmount)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Ödenmemiş Faturalar Özeti */}
-      {unpaidInvoices && (
+      {/* Fatura Özeti */}
+      {summary && (
         <div className="card">
           <div className="card-header">
             <h3 className="card-title flex items-center">
               <FileText className="h-5 w-5 mr-2" />
-              Ödenmemiş Faturalar
+              Fatura Özeti
             </h3>
           </div>
           <div className="card-content">
-            {loadingInvoices ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Özet Kartları */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <FileText className="h-6 w-6 text-blue-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Toplam Fatura</p>
-                        <p className="text-lg font-semibold">{unpaidInvoices.summary.totalInvoices}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <DollarSign className="h-6 w-6 text-green-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Toplam Tutar</p>
-                        <p className="text-lg font-semibold">{formatCurrency(unpaidInvoices.summary.totalAmount)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Vadesi Geçmiş</p>
-                        <p className="text-lg font-semibold">{unpaidInvoices.summary.overdueInvoices}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <DollarSign className="h-6 w-6 text-orange-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Gecikmiş Tutar</p>
-                        <p className="text-lg font-semibold">{formatCurrency(unpaidInvoices.summary.overdueAmount)}</p>
-                      </div>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <FileText className="h-6 w-6 text-blue-600 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">Toplam Fatura</p>
+                    <p className="text-lg font-semibold">{summary.totalInvoices}</p>
                   </div>
                 </div>
-
-                {/* Fatura Listesi */}
-                {unpaidInvoices.invoices.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Fatura Tarihi</th>
-                          <th>Vade Tarihi</th>
-                          <th>Tutar</th>
-                          <th>Durum</th>
-                          <th>Açıklama</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {unpaidInvoices.invoices.map((invoice) => (
-                          <tr key={invoice.id}>
-                            <td>{formatDate(invoice.date)}</td>
-                            <td>{invoice.dueDate ? formatDate(invoice.dueDate) : '-'}</td>
-                            <td className="font-medium">{formatCurrency(invoice.amount)}</td>
-                            <td>
-                              {invoice.isOverdue ? (
-                                <span className="badge badge-error">{invoice.overdueDays} gün gecikmiş</span>
-                              ) : (
-                                <span className="badge badge-success">Güncel</span>
-                              )}
-                            </td>
-                            <td>
-                              <div className="max-w-xs truncate" title={invoice.description}>
-                                {invoice.description}
-                              </div>
-                              {invoice.voucherNo && (
-                                <div className="text-xs text-gray-500">Evrak: {invoice.voucherNo}</div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <CheckCircle className="mx-auto h-8 w-8 text-green-500 mb-2" />
-                    <p className="text-gray-500">Bu müşterinin ödenmemiş faturası bulunmuyor</p>
-                  </div>
-                )}
               </div>
-            )}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">Ödenmiş</p>
+                    <p className="text-lg font-semibold">{summary.paidInvoices}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">Ödenmemiş</p>
+                    <p className="text-lg font-semibold">{summary.unpaidInvoices}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <DollarSign className="h-6 w-6 text-orange-600 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">Toplam Borç</p>
+                    <p className="text-lg font-semibold">{formatCurrency(summary.totalUnpaidAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Ödenmiş Faturalar Özeti */}
-      {paidInvoices && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title flex items-center">
-              <CheckCircle className="h-5 w-5 mr-2" />
-              Ödenmiş Faturalar
-            </h3>
-          </div>
-          <div className="card-content">
-            {loadingPaidInvoices ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Özet Kartları */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Toplam Ödeme</p>
-                        <p className="text-lg font-semibold">{paidInvoices.summary.totalPayments}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <DollarSign className="h-6 w-6 text-blue-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Toplam Tutar</p>
-                        <p className="text-lg font-semibold">{formatCurrency(paidInvoices.summary.totalAmount)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <DollarSign className="h-6 w-6 text-purple-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Ortalama Ödeme</p>
-                        <p className="text-lg font-semibold">{formatCurrency(paidInvoices.summary.averagePayment)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <div className="flex items-center">
-                      <Calendar className="h-6 w-6 text-yellow-600 mr-2" />
-                      <div>
-                        <p className="text-sm text-gray-600">Son Ödeme</p>
-                        <p className="text-lg font-semibold">
-                          {paidInvoices.summary.lastPaymentDate ? formatDate(paidInvoices.summary.lastPaymentDate) : '-'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ödeme Listesi */}
-                {paidInvoices.payments.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Ödeme Tarihi</th>
-                          <th>Tutar</th>
-                          <th>Ödeme Yöntemi</th>
-                          <th>Açıklama</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paidInvoices.payments.slice(0, 10).map((payment) => (
-                          <tr key={payment.id}>
-                            <td>{formatDate(payment.lastPaymentDate)}</td>
-                            <td className="font-medium text-success-600">{formatCurrency(payment.amount)}</td>
-                            <td>
-                              <span className="badge badge-success">{payment.paymentMethod}</span>
-                            </td>
-                            <td>
-                              <div className="max-w-xs truncate" title={payment.description}>
-                                {payment.description || 'Açıklama yok'}
-                              </div>
-                              {payment.payments?.length > 0 && (
-                                <div className="text-xs text-gray-500 mt-1 max-w-xs truncate" title={payment.payments[payment.payments.length - 1]?.description}>
-                                  Son ödeme: {payment.payments[payment.payments.length - 1]?.description || '-'}
-                                </div>
-                              )}
-                              {payment.voucherNo && (
-                                <div className="text-xs text-gray-500">Evrak: {payment.voucherNo}</div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {paidInvoices.payments.length > 10 && (
-                      <div className="text-center mt-4">
-                        <p className="text-sm text-gray-500">
-                          Son 10 ödeme gösteriliyor. Toplam {paidInvoices.payments.length} ödeme var.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                    <p className="text-gray-500">Bu müşterinin ödeme işlemi bulunmuyor</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      {/* Fatura Listesi */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title flex items-center">
+            <FileText className="h-5 w-5 mr-2" />
+            Fatura Listesi
+          </h3>
         </div>
-      )}
+        <div className="card-content">
+          {loadingInvoices ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600"></div>
+            </div>
+          ) : invoices.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="table">
+                                 <thead>
+                   <tr>
+                     <th>Fatura Tarihi</th>
+                     <th>Vade Tarihi</th>
+                     <th>Tutar</th>
+                     <th>Durum</th>
+                     <th>Son Ödeme</th>
+                     <th>Ödeme Yöntemi</th>
+                   </tr>
+                 </thead>
+                <tbody>
+                                     {invoices.map((invoice) => (
+                     <tr key={invoice.id}>
+                       <td>{formatDate(invoice.date)}</td>
+                       <td>{invoice.dueDate ? formatDate(invoice.dueDate) : '-'}</td>
+                       <td className="font-medium">{formatCurrency(invoice.amount)}</td>
+                       <td>{getStatusBadge(invoice)}</td>
+                       <td>
+                         {invoice.status === 'paid' && invoice.lastPaymentDate 
+                           ? formatDate(invoice.lastPaymentDate) 
+                           : '-'
+                         }
+                       </td>
+                       <td>
+                         {invoice.status === 'paid' && invoice.paymentMethod ? (
+                           <span className="badge badge-success">{invoice.paymentMethod}</span>
+                         ) : (
+                           '-'
+                         )}
+                       </td>
+                     </tr>
+                   ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <p className="text-gray-500">Bu müşterinin faturası bulunmuyor</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Ödeme Listesi */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title flex items-center">
+            <DollarSign className="h-5 w-5 mr-2" />
+            Ödeme Listesi
+          </h3>
+        </div>
+        <div className="card-content">
+          {loadingPayments ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600"></div>
+            </div>
+          ) : payments.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Ödeme Tarihi</th>
+                    <th>Tutar</th>
+                    <th>Ödeme Yöntemi</th>
+                    <th>Açıklama</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr key={payment.id}>
+                      <td>{formatDate(payment.date)}</td>
+                      <td className="font-medium text-green-600">{formatCurrency(payment.amount)}</td>
+                      <td>
+                        <span className="badge badge-success">{payment.documentType}</span>
+                      </td>
+                      <td>{payment.description || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <DollarSign className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <p className="text-gray-500">Bu müşterinin ödemesi bulunmuyor</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

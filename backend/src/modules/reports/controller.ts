@@ -128,6 +128,184 @@ export class ReportController {
     }
   }
 
+  // Seçilen gün sayısını fatura tarihine göre aşmış (dueDate yerine invoice.date) faturaların müşteri bazlı toplamı
+  static async getCustomersOverdueByDays(req: Request, res: Response) {
+    try {
+      const { days } = req.query as { days?: string };
+      const userId = (req as any).user.id;
+
+      const minDays = Number(days);
+      if (!Number.isFinite(minDays) || minDays < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'days parametresi 0 veya daha büyük bir tam sayı olmalıdır'
+        });
+      }
+
+      // Tüm faturalar (borç: debit>0) ve tüm ödemeler (alacak: credit>0) - kullanıcı scope'unda
+      const [allInvoices, allPayments, customers] = await Promise.all([
+        prisma.extractTransaction.findMany({
+          where: {
+            extract: { userId },
+            debit: { gt: 0 }
+          },
+          include: {
+            customer: { select: { id: true, name: true, code: true } }
+          },
+          orderBy: { date: 'asc' }
+        }),
+        prisma.extractTransaction.findMany({
+          where: {
+            extract: { userId },
+            credit: { gt: 0 }
+          },
+          orderBy: { date: 'asc' }
+        }),
+        prisma.customer.findMany({
+          where: { userId },
+          select: { id: true, name: true, code: true, dueDays: true }
+        })
+      ]);
+
+      // Hariç tutulacak müşteri kümesi (MH kodlu, Faktoringler, ORTAKLAR GÜMRÜK..., TOTAL MUŞAVİRLİK SERBEST MUH.ZEHRA ELVAN GÜN)
+      const excludedCustomerIds = new Set<string>();
+      const normalize = (s: string) =>
+        s
+          .toLowerCase()
+          .replace(/\./g, ' ')
+          .replace(/ş/g, 's')
+          .replace(/ı/g, 'i')
+          .replace(/ğ/g, 'g')
+          .replace(/ü/g, 'u')
+          .replace(/ö/g, 'o')
+          .replace(/ç/g, 'c')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const excludedByExactNameNorm = normalize('TOTAL MUŞAVİRLİK SERBEST MUH.ZEHRA ELVAN GÜN');
+
+      customers.forEach((c) => {
+        const name = c.name || '';
+        const nameLower = name.toLowerCase();
+        const codeUpper = (c.code || '').toUpperCase();
+        const isMHCode = codeUpper.startsWith('MH');
+        const isFactoring = nameLower.includes('faktoring') || nameLower.includes('faktör') || nameLower.includes('faktor') || nameLower.includes('factoring');
+        const isOrtaklarGumruk = nameLower.includes('ortaklar gümrük') || nameLower.includes('ortaklar gumruk');
+        const isTotalMusavirlik = normalize(name).includes(excludedByExactNameNorm);
+        if (isMHCode || isFactoring || isOrtaklarGumruk || isTotalMusavirlik) {
+          excludedCustomerIds.add(c.id);
+        }
+      });
+
+      // Müşteri bazında grupla
+      const customerGroups = new Map<string, { invoices: any[]; payments: any[]; customer?: any }>();
+
+      for (const invoice of allInvoices) {
+        if (!invoice.customerId || excludedCustomerIds.has(invoice.customerId)) continue;
+        if (!customerGroups.has(invoice.customerId)) {
+          customerGroups.set(invoice.customerId, { invoices: [], payments: [], customer: invoice.customer });
+        }
+        customerGroups.get(invoice.customerId)!.invoices.push({ ...invoice });
+      }
+
+      for (const payment of allPayments) {
+        if (!payment.customerId || excludedCustomerIds.has(payment.customerId)) continue;
+        if (!customerGroups.has(payment.customerId)) {
+          const customerInfo = customers.find(c => c.id === payment.customerId);
+          customerGroups.set(payment.customerId, { invoices: [], payments: [], customer: customerInfo });
+        }
+        // Kredi tutarı mutasyona uğrayacağından kopya ile çalışalım
+        customerGroups.get(payment.customerId)!.payments.push({ ...payment });
+      }
+
+      const today = new Date();
+      const result: Array<{
+        customer: { id: string; name: string; code: string };
+        overdueAmount: number;
+        overdueInvoiceCount: number;
+        maxOverdueDays: number;
+      }> = [];
+
+      for (const [customerId, group] of customerGroups) {
+        const { invoices, payments } = group;
+        if (!invoices.length) continue;
+
+        // FIFO için kronolojik sırada olduklarından emin ol
+        invoices.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        payments.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        // Ödeme kopyası
+        const remainingPayments = payments.map(p => ({ ...p }));
+
+        let customerOverdueAmount = 0;
+        let overdueInvoiceCount = 0;
+        let maxOverdueDays = 0;
+
+        // Küçük bakiye eşiği (TL)
+        const minInvoiceAmountThreshold = 500;
+
+        for (const invoice of invoices) {
+          let remainingInvoiceAmount = invoice.debit;
+
+          // Ödemeleri uygula (FIFO)
+          for (let i = 0; i < remainingPayments.length && remainingInvoiceAmount > 0; i++) {
+            const payment = remainingPayments[i];
+            const available = payment.credit;
+            const applied = Math.min(available, remainingInvoiceAmount);
+            remainingInvoiceAmount -= applied;
+            payment.credit -= applied;
+            if (payment.credit <= 0) {
+              remainingPayments.splice(i, 1);
+              i--;
+            }
+          }
+
+          // Kalan tutar varsa ve fatura tarihinden bugüne geçen süre gün eşiğini aşıyorsa ekle
+          if (remainingInvoiceAmount > 0) {
+            const diffDays = Math.floor((today.getTime() - new Date(invoice.date).getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays >= minDays && remainingInvoiceAmount >= minInvoiceAmountThreshold) {
+              customerOverdueAmount += remainingInvoiceAmount;
+              overdueInvoiceCount += 1;
+              if (diffDays > maxOverdueDays) maxOverdueDays = diffDays;
+            }
+          }
+        }
+
+        if (customerOverdueAmount > 0) {
+          const customerInfo = group.customer || customers.find(c => c.id === customerId);
+          if (customerInfo) {
+            result.push({
+              customer: customerInfo,
+              overdueAmount: customerOverdueAmount,
+              overdueInvoiceCount,
+              maxOverdueDays
+            });
+          }
+        }
+      }
+
+      // Büyükten küçüğe sırala
+      result.sort((a, b) => b.overdueAmount - a.overdueAmount);
+
+      return res.json({
+        success: true,
+        data: {
+          days: minDays,
+          customers: result,
+          summary: {
+            customerCount: result.length,
+            totalOverdueAmount: result.reduce((sum, r) => sum + r.overdueAmount, 0)
+          }
+        }
+      });
+    } catch (error) {
+      logError('Seçilen gün kadar gecikmiş faturalar raporu hatası:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Rapor getirilirken bir hata oluştu'
+      });
+    }
+  }
   // Aylık trend raporu
   static async getMonthlyTrend(req: Request, res: Response) {
     try {
@@ -1370,6 +1548,20 @@ export class ReportController {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       });
 
+      // Ağırlıklı gün hesaplaması
+      let weightedDays = 0;
+      let totalWeightedAmount = 0;
+      
+      unpaidInvoices.forEach(invoice => {
+        if (invoice.isOverdue && invoice.overdueDays > 0) {
+          const weightedAmount = invoice.amount * invoice.overdueDays;
+          weightedDays += weightedAmount;
+          totalWeightedAmount += invoice.amount;
+        }
+      });
+      
+      const averageWeightedDays = totalWeightedAmount > 0 ? Math.round(weightedDays / totalWeightedAmount) : 0;
+
       // Özet istatistikler
       const summary = {
         totalInvoices: unpaidInvoices.length,
@@ -1378,7 +1570,8 @@ export class ReportController {
         overdueAmount: unpaidInvoices.filter(inv => inv.isOverdue).reduce((sum, inv) => sum + inv.amount, 0),
         averageOverdueDays: unpaidInvoices.filter(inv => inv.isOverdue).length > 0 
           ? Math.round(unpaidInvoices.filter(inv => inv.isOverdue).reduce((sum, inv) => sum + inv.overdueDays, 0) / unpaidInvoices.filter(inv => inv.isOverdue).length)
-          : 0
+          : 0,
+        weightedDays: averageWeightedDays
       };
 
       return res.json({

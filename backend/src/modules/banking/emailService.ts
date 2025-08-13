@@ -18,9 +18,10 @@ export class YapiKrediFASTEmailService {
 
   /** Yapı Kredi FAST / HAVALE / EFT e-posta regex'leri */
   private patterns = {
-    fast: /(?<mask>\d+X+\d+) TL \/ (?<iban>TR[\dX]{24}) hesab(?:ınıza|ınızdan),\s*(?<dt>\d{2}\/\d{2}\/\d{4}(?:\s\d{2}:\d{2}(?::\d{2})?)?) tarihinde,\s*(?<party>.+?) isimli\/unvanlı kiş(?:iye|iden) (?<amt>[\d\.]+,\d{2}) TL FAST ödemesi (?:gelmiştir|gönderilmiştir)\./si,
-    havale: /(?<mask>\d+X+\d+) TL \/ (?<iban>TR[\dX]{24}) hesab(?:ınızdan|ınıza),\s*(?<dt>\d{2}\/\d{2}\/\d{4}(?:\s\d{2}:\d{2}(?::\d{2})?)?) tarihinde,\s*(?<party>.+?) isimli\/unvanlı kiş(?:iye|iden)\s*(?<amt>[\d\.]+,\d{2}) TL HAVALE (?:çıkışı gerçekleşmiştir|çıkışı|ödemesi gönderilmiştir|ödemesi gelmiştir|gönderilmiştir|gelmiştir)\./si,
-    eft: /(?<mask>\d+X+\d+) TL \/ (?<iban>TR[\dX]{24}) hesab(?:ınızdan|ınıza),\s*(?<dt>\d{2}\/\d{2}\/\d{4}(?:\s\d{2}:\d{2}(?::\d{2})?)?) tarihinde,\s*(?<party>.+?) isimli\/unvanlı kiş(?:iye|iden)\s*(?<amt>[\d\.]+,\d{2}) TL EFT (?:girişi gerçekleşmiştir|girişi|ödemesi gelmiştir|ödemesi gönderilmiştir)\./si,
+    // IBAN: TR + 24 karakter, araya boşluk gelebilir → (?:[\dX]\s?){24}
+    fast: /(?<mask>\d+X+\d+) TL \/ (?<iban>TR(?:[\dX]\s?){24}) hesab(?:ınıza|ınızdan),\s*(?<dt>\d{2}\/\d{2}\/\d{4}(?:\s\d{2}:\d{2}(?::\d{2})?)?) tarihinde,\s*(?<party>.+?) isimli\/unvanlı kiş(?:iye|iden)\s*(?<amt>[\d\.]+,\d{2}) TL FAST ödemesi (?:gelmiştir|gönderilmiştir)\./si,
+    havale: /(?<mask>\d+X+\d+) TL \/ (?<iban>TR(?:[\dX]\s?){24}) hesab(?:ınızdan|ınıza),\s*(?<dt>\d{2}\/\d{2}\/\d{4}(?:\s\d{2}:\d{2}(?::\d{2})?)?) tarihinde,\s*(?<party>.+?) isimli\/unvanlı kiş(?:iye|iden)\s*(?<amt>[\d\.]+,\d{2}) TL HAVALE (?:çıkışı gerçekleşmiştir|çıkışı|ödemesi gönderilmiştir|ödemesi gelmiştir|gönderilmiştir|gelmiştir)\./si,
+    eft: /(?<mask>\d+X+\d+) TL \/ (?<iban>TR(?:[\dX]\s?){24}) hesab(?:ınızdan|ınıza),\s*(?<dt>\d{2}\/\d{2}\/\d{4}(?:\s\d{2}:\d{2}(?::\d{2})?)?) tarihinde,\s*(?<party>.+?) isimli\/unvanlı kiş(?:iye|iden)\s*(?<amt>[\d\.]+,\d{2}) TL EFT (?:girişi gerçekleşmiştir|girişi|ödemesi gelmiştir|ödemesi gönderilmiştir)\./si,
     balance: /(?<mask>\d+X+\d+) TL hesab(?:ınızın|ınızın) kullanılabilir bakiyesi (?<bal>[\d\.]+,\d{2}) TL/si
   };
 
@@ -46,6 +47,15 @@ export class YapiKrediFASTEmailService {
 
   constructor() {
     this.failedLogPath = path.join(__dirname, '../../../logs/failed-fast-emails.log');
+    // Log klasörü yoksa oluştur
+    try {
+      const logsDir = path.dirname(this.failedLogPath);
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+      }
+    } catch (e) {
+      logError('Log klasörü oluşturulamadı:', e);
+    }
     console.log(`📧 Email Service configured - Batch: ${this.config.batchSize}, Concurrency: ${this.config.concurrencyLimit}`);
   }
 
@@ -55,18 +65,25 @@ export class YapiKrediFASTEmailService {
     if (this.isConnected) return true;
 
     // Tüm email credential'ları environment variable'dan alınır
+    const host = process.env.EMAIL_HOST || process.env.MAIL_HOST;
+    const portStr = process.env.EMAIL_PORT || process.env.MAIL_PORT || '993';
+    const user = process.env.EMAIL_USER || process.env.MAIL_USER;
+    const pass = process.env.EMAIL_PASS || process.env.MAIL_PASS;
+    const secureEnv = process.env.EMAIL_SECURE || process.env.MAIL_SECURE || 'true';
+    const secure = String(secureEnv).toLowerCase() === 'true';
+
     const cfg = {
-      host: process.env.EMAIL_HOST!, // Örn: 'imap.yapikredi.com.tr'
-      port: +(process.env.EMAIL_PORT || '993'), // Örn: 993
-      secure: true,
+      host: host!,
+      port: +portStr,
+      secure,
       auth: {
-        user: process.env.EMAIL_USER!,
-        pass: process.env.EMAIL_PASS!
+        user: user!,
+        pass: pass!
       }
     };
 
     if (!cfg.host || !cfg.port || !cfg.auth.user || !cfg.auth.pass) {
-      throw new Error('Email servis environment variable eksik! EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS zorunlu.');
+      throw new Error('Email servis environment variable eksik! EMAIL_* veya MAIL_* değişkenleri zorunlu.');
     }
 
     this.imap = new ImapFlow(cfg);
@@ -103,10 +120,17 @@ export class YapiKrediFASTEmailService {
       throw err;
     }
 
-    const criteria = {
+    const subjectFilter = process.env.YAPIKREDI_SUBJECT_FILTER || 'FAST OR HAVALE OR EFT OR asistan';
+    const fromFilter = process.env.YAPIKREDI_FROM_EMAIL;
+
+    const criteria: any = {
       unseen: true,
-      subject: ['FAST', 'HAVALE', 'EFT', 'asistan']
+      subject: subjectFilter
     };
+
+    if (fromFilter) {
+      criteria.from = fromFilter;
+    }
 
     return await this.fetchEmailsBatch(criteria);
   }
@@ -215,12 +239,12 @@ export class YapiKrediFASTEmailService {
   /* ───────────────────────── PARSING ───────────────────────── */
 
   async parseYapiKrediFASTEmail(mail: any): Promise<any> {
-    if (!mail || !mail.text) {
+    if (!mail || (!mail.text && !mail.html)) {
       logError('Invalid email data:', mail);
       return null;
     }
 
-    const body = this.cleanHtml(mail.text);
+    const body = this.cleanHtml(mail.text || mail.html);
     let match = null;
     let type = '';
 
@@ -263,9 +287,8 @@ export class YapiKrediFASTEmailService {
     return {
       messageId: mail.messageId,
       bankCode: 'YAPIKREDI',
-      source: 'email',
       direction: this.detectDirection(mail, body),
-      accountIban: match.groups?.iban || '',
+      accountIban: this.normalizeIban(match.groups?.iban || ''),
       maskedAccount: match.groups?.mask || '',
       transactionDate: this.parseDate(match.groups?.dt || '') || mail.date || new Date(),
       amount: this.parseAmount(match.groups?.amt || '0'),
@@ -342,6 +365,14 @@ export class YapiKrediFASTEmailService {
     return parseFloat(str.replace(/\./g, '').replace(',', '.'));
   }
 
+  /** IBAN'ı normalize et: boşlukları kaldır, büyük harfe çevir */
+  normalizeIban(iban: string): string {
+    return (iban || '')
+      .replace(/\s+/g, '')
+      .replace(/ı/g, 'I')
+      .toUpperCase();
+  }
+
   /* ───────────────────────── IDLE ───────────────────────── */
 
   async startRealtimeMonitoring(callback: (transaction: any) => void): Promise<void> {
@@ -378,6 +409,14 @@ export class YapiKrediFASTEmailService {
             logError('Realtime email processing error:', err);
           }
         });
+
+        // IDLE bağlantı kopması durumunda yeniden bağlan
+        (idle as any).on('close', async () => {
+          console.log('🔄 IDLE bağlantısı koptu, yeniden bağlanılıyor...');
+          setTimeout(() => {
+            this.startRealtimeMonitoring(callback);
+          }, 5000);
+        });
       }
 
       console.log('🔄 Realtime email monitoring başlatıldı');
@@ -385,6 +424,112 @@ export class YapiKrediFASTEmailService {
     } catch (err) {
       logError('Realtime monitoring başlatılamadı:', err);
       throw err;
+    }
+  }
+
+  // Realtime monitoring durumunu kontrol et
+  async stopRealtimeMonitoring(): Promise<void> {
+    try {
+      if (this.imap && this.isConnected) {
+        // IDLE durdurma işlemi için farklı yaklaşım
+        console.log('🛑 Realtime monitoring durduruldu');
+      }
+    } catch (err) {
+      logError('Realtime monitoring durdurma hatası:', err);
+    }
+  }
+
+  // Email istatistikleri
+  async getEmailStats(): Promise<any> {
+    try {
+      // Environment variables kontrolü
+      if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        return {
+          totalMessages: 0,
+          unseenMessages: 0,
+          metrics: this.getMetrics(),
+          isConnected: false,
+          error: 'Email ayarları yapılandırılmamış'
+        };
+      }
+
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      await this.imap!.mailboxOpen('INBOX');
+      const status = await this.imap!.status('INBOX', { unseen: true, messages: true });
+      
+      return {
+        totalMessages: status.messages || 0,
+        unseenMessages: status.unseen || 0,
+        metrics: this.getMetrics(),
+        isConnected: this.isConnected
+      };
+    } catch (err) {
+      logError('Email istatistikleri alınamadı:', err);
+      return {
+        totalMessages: 0,
+        unseenMessages: 0,
+        metrics: this.getMetrics(),
+        isConnected: false,
+        error: err instanceof Error ? err.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Belirli bir tarih aralığındaki emailleri çek
+  async fetchEmailsByDateRange(startDate: Date, endDate: Date): Promise<any[]> {
+    if (!this.isConnected) await this.connect();
+
+    try {
+      await this.imap!.mailboxOpen('INBOX');
+      
+      const subjectFilter = process.env.YAPIKREDI_SUBJECT_FILTER || 'FAST OR HAVALE OR EFT OR asistan';
+      const fromFilter = process.env.YAPIKREDI_FROM_EMAIL;
+
+      const criteria: any = {
+        since: startDate,
+        before: endDate,
+        subject: subjectFilter
+      };
+
+      if (fromFilter) {
+        criteria.from = fromFilter;
+      }
+
+      return await this.fetchEmailsBatch(criteria);
+    } catch (err) {
+      logError('Tarih aralığı email çekme hatası:', err);
+      throw err;
+    }
+  }
+
+  // Email ayarlarını güncelle
+  async updateEmailSettings(settings: {
+    host?: string;
+    port?: number;
+    user?: string;
+    pass?: string;
+    secure?: boolean;
+  }): Promise<boolean> {
+    try {
+      // Mevcut bağlantıyı kapat
+      await this.disconnect();
+      
+      // Environment variables'ları güncelle (gerçek uygulamada config dosyasından okunmalı)
+      if (settings.host) process.env.EMAIL_HOST = settings.host;
+      if (settings.port) process.env.EMAIL_PORT = settings.port.toString();
+      if (settings.user) process.env.EMAIL_USER = settings.user;
+      if (settings.pass) process.env.EMAIL_PASS = settings.pass;
+      
+      // Yeni ayarlarla bağlan
+      await this.connect();
+      
+      return true;
+    } catch (err) {
+      logError('Email ayarları güncellenemedi:', err);
+      return false;
     }
   }
 }

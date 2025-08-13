@@ -13,5 +13,10 @@ export declare class BankingController {
     getMatchingStats(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     runAutoMatching(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     private parseYapiKrediEmail;
+    getEmailStats(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    fetchEmailsByDateRange(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    startRealtimeMonitoring(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    stopRealtimeMonitoring(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    updateEmailSettings(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
 }
 //# sourceMappingURL=controller.d.ts.map

@@ -41,6 +41,11 @@ const limitValidation = [
         .isInt({ min: 1, max: 100 })
         .withMessage('Limit 1-100 arasında olmalıdır')
 ];
+const daysValidation = [
+    (0, express_validator_1.query)('days')
+        .isInt({ min: 0 })
+        .withMessage('days parametresi 0 veya daha büyük bir tamsayı olmalıdır')
+];
 router.get('/dashboard', auth_1.authMiddleware, dateValidation, controller_1.ReportController.getDashboardSummary);
 router.get('/monthly-trend', auth_1.authMiddleware, yearValidation, controller_1.ReportController.getMonthlyTrend);
 router.get('/category', auth_1.authMiddleware, [
@@ -81,5 +86,6 @@ router.get('/customer/:customerId/unpaid-invoices', auth_1.authMiddleware, contr
 router.get('/customer/:customerId/paid-invoices', auth_1.authMiddleware, controller_1.ReportController.getCustomerPaidInvoicesSummary);
 router.get('/customer/:customerId/payments', auth_1.authMiddleware, controller_1.ReportController.getCustomerPayments);
 router.get('/debug-fifo', auth_1.authMiddleware, controller_1.ReportController.debugFifoCalculation);
+router.get('/overdue-by-days', auth_1.authMiddleware, daysValidation, controller_1.ReportController.getCustomersOverdueByDays);
 exports.default = router;
 //# sourceMappingURL=routes.js.map

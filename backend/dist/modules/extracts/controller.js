@@ -684,9 +684,18 @@ class ExtractController {
         if (batch.length > 0) {
             try {
                 const newTransactions = await this.filterNewTransactions(batch);
-                if (newTransactions.length > 0) {
-                    await prisma.extractTransaction.createMany({ data: newTransactions });
-                    console.log(`[DEBUG] Yeni işlemler eklendi. Toplam: ${newTransactions.length}`);
+                const seenKeys = new Set();
+                const dedupedTransactions = [];
+                for (const tx of newTransactions) {
+                    const key = this.generateTransactionKey(tx);
+                    if (seenKeys.has(key))
+                        continue;
+                    seenKeys.add(key);
+                    dedupedTransactions.push(tx);
+                }
+                if (dedupedTransactions.length > 0) {
+                    await prisma.extractTransaction.createMany({ data: dedupedTransactions });
+                    console.log(`[DEBUG] Yeni işlemler eklendi. Toplam: ${dedupedTransactions.length}`);
                     await this.updateCustomerBalances(newTransactions);
                 }
                 else {

@@ -13,5 +13,10 @@ router.get('/email-settings', controller.getEmailSettings.bind(controller));
 router.post('/test-connection', controller.testEmailConnection.bind(controller));
 router.get('/matching-stats', controller.getMatchingStats.bind(controller));
 router.post('/run-auto-matching', controller.runAutoMatching.bind(controller));
+router.get('/email-stats', controller.getEmailStats.bind(controller));
+router.post('/fetch-emails-by-date', controller.fetchEmailsByDateRange.bind(controller));
+router.post('/start-monitoring', controller.startRealtimeMonitoring.bind(controller));
+router.post('/stop-monitoring', controller.stopRealtimeMonitoring.bind(controller));
+router.put('/email-settings', controller.updateEmailSettings.bind(controller));
 exports.default = router;
 //# sourceMappingURL=routes.js.map

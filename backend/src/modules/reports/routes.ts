@@ -47,6 +47,13 @@ const limitValidation = [
     .withMessage('Limit 1-100 arasında olmalıdır')
 ];
 
+// Gün eşiği validasyonu
+const daysValidation = [
+  query('days')
+    .isInt({ min: 0 })
+    .withMessage('days parametresi 0 veya daha büyük bir tamsayı olmalıdır')
+];
+
 // Dashboard özet raporu
 router.get('/dashboard', authMiddleware, dateValidation, ReportController.getDashboardSummary);
 
@@ -118,5 +125,8 @@ router.get('/customer/:customerId/payments', authMiddleware, ReportController.ge
 
 // Debug: FIFO hesaplamasını test et
 router.get('/debug-fifo', authMiddleware, ReportController.debugFifoCalculation);
+
+// Seçilen gün kadar gecikmiş faturaların müşteri bazlı toplamı
+router.get('/overdue-by-days', authMiddleware, daysValidation, ReportController.getCustomersOverdueByDays);
 
 export default router; 

@@ -5,35 +5,49 @@ const prisma = new PrismaClient();
 
 async function createTestUser() {
   try {
-    const hashedPassword = await bcrypt.hash('123456', 10);
+    console.log('👤 Test kullanıcısı oluşturuluyor...');
     
-    const user = await prisma.user.upsert({
-      where: { email: 'admin@test.com' },
-      update: {
-        username: 'admin',
+    // Şifreyi hash'le
+    const hashedPassword = await bcrypt.hash('test123', 10);
+    
+    // Test kullanıcısını oluştur
+    const testUser = await prisma.user.create({
+      data: {
+        username: 'testuser',
+        email: 'test@example.com',
         password: hashedPassword,
-        role: 'ADMIN',
-        isActive: true
-      },
-      create: {
-        username: 'admin',
-        email: 'admin@test.com',
-        password: hashedPassword,
-        role: 'ADMIN',
         isActive: true
       }
     });
     
-    console.log('✅ Test kullanıcısı başarıyla oluşturuldu:');
-    console.log(`   Email: ${user.email}`);
-    console.log(`   Şifre: 123456`);
-    console.log(`   Rol: ${user.role}`);
+    console.log('✅ Test kullanıcısı oluşturuldu:');
+    console.log(`   Username: ${testUser.username}`);
+    console.log(`   Email: ${testUser.email}`);
+    console.log(`   ID: ${testUser.id}`);
+    console.log(`   Şifre: test123`);
     
   } catch (error) {
-    console.error('❌ Test kullanıcısı oluşturma hatası:', error);
+    if (error.code === 'P2002') {
+      console.log('⚠️ Test kullanıcısı zaten mevcut');
+    } else {
+      console.error('❌ Test kullanıcısı oluşturma hatası:', error);
+    }
   } finally {
     await prisma.$disconnect();
   }
 }
 
-createTestUser(); 
+// Script'i çalıştır
+if (require.main === module) {
+  createTestUser()
+    .then(() => {
+      console.log('✅ Test kullanıcısı işlemi tamamlandı');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ Test kullanıcısı hatası:', error);
+      process.exit(1);
+    });
+}
+
+module.exports = { createTestUser }; 

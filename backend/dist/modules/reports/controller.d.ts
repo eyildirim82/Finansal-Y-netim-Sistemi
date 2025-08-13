@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 export declare class ReportController {
     static getDashboardSummary(req: Request, res: Response): Promise<void>;
+    static getCustomersOverdueByDays(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     static getMonthlyTrend(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     static getCategoryReport(req: Request, res: Response): Promise<void>;
     static getCustomerReport(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;

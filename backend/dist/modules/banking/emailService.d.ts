@@ -28,6 +28,17 @@ export declare class YapiKrediFASTEmailService {
     cleanHtml(html: string): string;
     parseDate(str: string): Date | null;
     parseAmount(str: string): number;
+    normalizeIban(iban: string): string;
     startRealtimeMonitoring(callback: (transaction: any) => void): Promise<void>;
+    stopRealtimeMonitoring(): Promise<void>;
+    getEmailStats(): Promise<any>;
+    fetchEmailsByDateRange(startDate: Date, endDate: Date): Promise<any[]>;
+    updateEmailSettings(settings: {
+        host?: string;
+        port?: number;
+        user?: string;
+        pass?: string;
+        secure?: boolean;
+    }): Promise<boolean>;
 }
 //# sourceMappingURL=emailService.d.ts.map

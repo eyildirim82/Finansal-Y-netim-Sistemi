@@ -109,6 +109,32 @@ model Transaction {
   @@map("transactions")
 }
 
+// PDF'den Parse Edilen İşlemler
+model PDFTransaction {
+  id                String   @id
+  dateTime          String?
+  dateTimeIso       String
+  description       String?
+  debit             Float    @default(0)
+  credit            Float    @default(0)
+  amount            Float
+  currency          String
+  balance           Float
+  balanceCurrency   String
+  operation         String?
+  channel           String?
+  direction         String?
+  counterpartyName  String?
+  counterpartyIban  String?
+  hash              String   @unique
+  raw               String?
+  category          String?
+  tags              String?  // JSON array string
+  createdAt         DateTime @default(now())
+
+  @@map("pdf_transactions")
+}
+
 // Bakiyeler
 model Balance {
   id           String   @id @default(cuid())
@@ -173,6 +199,8 @@ model ExtractTransaction {
   @@unique([customerId, voucherNo, date, description, debit, credit])
   @@map("extract_transactions")
 }
+
+
 
 // ===== YAPI KREDİ SİSTEMİ TABLOLARI =====
 

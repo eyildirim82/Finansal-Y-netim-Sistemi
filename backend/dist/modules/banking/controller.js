@@ -273,10 +273,14 @@ class BankingController {
     async getEmailSettings(req, res) {
         try {
             const settings = {
-                host: process.env.EMAIL_HOST,
-                port: process.env.EMAIL_PORT,
-                user: process.env.EMAIL_USER,
-                isConfigured: !!(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS)
+                host: process.env.EMAIL_HOST || process.env.MAIL_HOST,
+                port: process.env.EMAIL_PORT || process.env.MAIL_PORT,
+                user: process.env.EMAIL_USER || process.env.MAIL_USER,
+                from: process.env.YAPIKREDI_FROM_EMAIL,
+                subjectFilter: process.env.YAPIKREDI_SUBJECT_FILTER,
+                autoProcess: (process.env.YAPIKREDI_AUTO_PROCESS || 'false').toLowerCase() === 'true',
+                realtimeMonitoring: (process.env.YAPIKREDI_REALTIME_MONITORING || 'false').toLowerCase() === 'true',
+                isConfigured: !!((process.env.EMAIL_HOST || process.env.MAIL_HOST) && (process.env.EMAIL_USER || process.env.MAIL_USER) && (process.env.EMAIL_PASS || process.env.MAIL_PASS))
             };
             return res.json({
                 success: true,
@@ -401,6 +405,145 @@ class BankingController {
         catch (error) {
             (0, logger_1.logError)('Email parse hatası:', error);
             return null;
+        }
+    }
+    async getEmailStats(req, res) {
+        try {
+            const stats = await this.emailService.getEmailStats();
+            return res.json({
+                success: true,
+                data: stats
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Email istatistikleri hatası:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Email istatistikleri getirilemedi'
+            });
+        }
+    }
+    async fetchEmailsByDateRange(req, res) {
+        try {
+            const { startDate, endDate } = req.body;
+            if (!startDate || !endDate) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Başlangıç ve bitiş tarihi gerekli'
+                });
+            }
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Geçersiz tarih formatı'
+                });
+            }
+            const emails = await this.emailService.fetchEmailsByDateRange(start, end);
+            const processedTransactions = [];
+            let duplicateCount = 0;
+            for (const emailData of emails) {
+                try {
+                    const existingTransaction = await prisma.bankTransaction.findFirst({
+                        where: { messageId: emailData.transaction.messageId }
+                    });
+                    if (existingTransaction) {
+                        duplicateCount++;
+                        continue;
+                    }
+                    const savedTransaction = await prisma.bankTransaction.create({
+                        data: emailData.transaction
+                    });
+                    const matchResult = await this.matchingService.matchTransaction(savedTransaction);
+                    await this.matchingService.saveMatchResult(savedTransaction.id, matchResult);
+                    processedTransactions.push({
+                        transaction: savedTransaction,
+                        matchResult
+                    });
+                }
+                catch (error) {
+                    (0, logger_1.logError)('Email işleme hatası:', error);
+                }
+            }
+            return res.json({
+                success: true,
+                message: `${processedTransactions.length} email işlendi, ${duplicateCount} duplikasyon`,
+                data: {
+                    processed: processedTransactions.length,
+                    duplicates: duplicateCount,
+                    transactions: processedTransactions,
+                    dateRange: { startDate: start, endDate: end }
+                }
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Tarih aralığı email çekme hatası:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Tarih aralığında email çekilemedi'
+            });
+        }
+    }
+    async startRealtimeMonitoring(req, res) {
+        try {
+            await this.emailService.startRealtimeMonitoring((transaction) => {
+                console.log('🔄 Yeni işlem tespit edildi:', transaction);
+            });
+            return res.json({
+                success: true,
+                message: 'Realtime monitoring başlatıldı'
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Realtime monitoring başlatma hatası:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Realtime monitoring başlatılamadı'
+            });
+        }
+    }
+    async stopRealtimeMonitoring(req, res) {
+        try {
+            await this.emailService.stopRealtimeMonitoring();
+            return res.json({
+                success: true,
+                message: 'Realtime monitoring durduruldu'
+            });
+        }
+        catch (error) {
+            (0, logger_1.logError)('Realtime monitoring durdurma hatası:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Realtime monitoring durdurulamadı'
+            });
+        }
+    }
+    async updateEmailSettings(req, res) {
+        try {
+            const { host, port, user, pass, secure } = req.body;
+            const success = await this.emailService.updateEmailSettings({
+                host, port, user, pass, secure
+            });
+            if (success) {
+                return res.json({
+                    success: true,
+                    message: 'Email ayarları güncellendi'
+                });
+            }
+            else {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email ayarları güncellenemedi'
+                });
+            }
+        }
+        catch (error) {
+            (0, logger_1.logError)('Email ayarları güncelleme hatası:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Email ayarları güncellenemedi'
+            });
         }
     }
 }

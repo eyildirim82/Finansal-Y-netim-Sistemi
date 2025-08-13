@@ -7,6 +7,7 @@ const Reports = () => {
   const [selectedReport, setSelectedReport] = useState('')
   const [reportData, setReportData] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [overdueDays, setOverdueDays] = useState(30)
   const [dateRange, setDateRange] = useState({
     startDate: '',
     endDate: ''
@@ -17,7 +18,8 @@ const Reports = () => {
     { id: 'monthly-trend', name: 'Aylık Trend', description: 'Aylık gelir ve gider trendi' },
     { id: 'category', name: 'Kategori Raporu', description: 'Kategori bazlı analiz' },
     { id: 'customer', name: 'Müşteri Raporu', description: 'Müşteri bazlı işlem özeti' },
-    { id: 'cash-flow', name: 'Nakit Akışı', description: 'Nakit giriş ve çıkış raporu' }
+    { id: 'cash-flow', name: 'Nakit Akışı', description: 'Nakit giriş ve çıkış raporu' },
+    { id: 'overdue-by-days', name: 'Gecikmiş Faturalar (Gün Bazlı)', description: 'Seçilen gün eşiğini aşan ödenmemiş faturaların müşteri bazlı toplamı' }
   ]
 
   // Rapor yükle
@@ -46,6 +48,9 @@ const Reports = () => {
           break
         case 'cash-flow':
           response = await reportService.getCashFlowReport(params)
+          break
+        case 'overdue-by-days':
+          response = await reportService.getOverdueByDays(overdueDays)
           break
         default:
           throw new Error('Geçersiz rapor türü')
@@ -113,6 +118,17 @@ const Reports = () => {
               onChange={(e) => handleDateChange('endDate', e.target.value)}
               placeholder="Bitiş tarihi"
             />
+            {selectedReport === 'overdue-by-days' && (
+              <input
+                type="number"
+                min={0}
+                className="input w-40"
+                value={overdueDays}
+                onChange={(e) => setOverdueDays(Math.max(0, Number(e.target.value)))}
+                placeholder="Gün (örn. 30)"
+                title="Gün eşiği"
+              />)
+            }
           </div>
           <button 
             className="btn btn-secondary btn-md"
@@ -338,6 +354,49 @@ const Reports = () => {
                         <p className="text-2xl font-bold">{formatCurrency(reportData.cashFlow.netFlow)}</p>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Overdue By Days Report */}
+              {selectedReport === 'overdue-by-days' && reportData.customers && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-medium">
+                      {overdueDays}+ gün gecikmiş faturalar (Müşteri Bazlı)
+                    </h4>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">Toplam Müşteri</p>
+                      <p className="text-lg font-semibold">{reportData.summary?.customerCount || reportData.customers.length}</p>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <span className="text-sm text-gray-600">Toplam Gecikmiş Tutar: </span>
+                    <span className="text-lg font-semibold">{formatCurrency(reportData.summary?.totalOverdueAmount || 0)}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="table">
+                      <thead className="table-header">
+                        <tr>
+                          <th className="table-header-cell">Müşteri</th>
+                          <th className="table-header-cell">Kod</th>
+                          <th className="table-header-cell">Gecikmiş Fatura Adedi</th>
+                          <th className="table-header-cell">Maks. Gecikme (gün)</th>
+                          <th className="table-header-cell">Gecikmiş Tutar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.customers.map((row, idx) => (
+                          <tr key={idx} className="table-row">
+                            <td className="table-cell">{row.customer?.name}</td>
+                            <td className="table-cell">{row.customer?.code}</td>
+                            <td className="table-cell">{row.overdueInvoiceCount}</td>
+                            <td className="table-cell">{row.maxOverdueDays}</td>
+                            <td className="table-cell font-medium">{formatCurrency(row.overdueAmount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

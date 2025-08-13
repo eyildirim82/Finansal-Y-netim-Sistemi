@@ -28,7 +28,9 @@
     },
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "typeRoots": ["./node_modules/@types"],
+    "types": []
   },
   "include": [
     "src/**/*",

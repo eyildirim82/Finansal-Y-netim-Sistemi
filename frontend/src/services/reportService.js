@@ -64,6 +64,11 @@ const reportService = {
   // FIFO hesaplama debug raporu
   getDebugFifo: (params = '') => {
     return apiClient.get(`/reports/debug-fifo?${params}`)
+  },
+
+  // Seçilen gün kadar gecikmiş faturaların müşteri bazlı toplamı
+  getOverdueByDays: (days) => {
+    return apiClient.get('/reports/overdue-by-days', { params: { days } })
   }
 }
 

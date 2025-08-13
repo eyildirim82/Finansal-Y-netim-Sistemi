@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, AlertTriangle, Calendar, Filter, Download, Eye, Phone, DollarSign } from 'lucide-react'
+import { FileText, AlertTriangle, Calendar, Filter, Download, DollarSign, Users } from 'lucide-react'
 import reportService from '../services/reportService'
 import toast from 'react-hot-toast'
 
@@ -9,8 +9,6 @@ const UnpaidInvoices = () => {
   const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState({
     customerId: '',
-    startDate: '',
-    endDate: '',
     overdueOnly: false,
     sortBy: 'dueDate',
     sortOrder: 'asc'
@@ -22,6 +20,10 @@ const UnpaidInvoices = () => {
     pages: 0
   })
   const [customers, setCustomers] = useState([])
+  const [overdueDays, setOverdueDays] = useState(30)
+  const [loadingOverdue, setLoadingOverdue] = useState(false)
+  const [overdueSummary, setOverdueSummary] = useState(null)
+  const [overdueCustomers, setOverdueCustomers] = useState([])
 
   // Müşterileri yükle
   useEffect(() => {
@@ -32,6 +34,12 @@ const UnpaidInvoices = () => {
   useEffect(() => {
     loadInvoices()
   }, [filters, pagination.page])
+
+  // Gün bazlı gecikmiş müşteri özetini yükle
+  useEffect(() => {
+    loadOverdueByDays()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadCustomers = async () => {
     try {
@@ -58,8 +66,6 @@ const UnpaidInvoices = () => {
       })
 
       if (filters.customerId) params.append('customerId', filters.customerId)
-      if (filters.startDate) params.append('startDate', filters.startDate)
-      if (filters.endDate) params.append('endDate', filters.endDate)
 
       const response = await reportService.getUnpaidInvoices(params.toString())
       
@@ -77,6 +83,22 @@ const UnpaidInvoices = () => {
       toast.error('Faturalar yüklenirken hata oluştu')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadOverdueByDays = async () => {
+    try {
+      setLoadingOverdue(true)
+      const res = await reportService.getOverdueByDays(overdueDays)
+      if (res.data.success) {
+        setOverdueSummary(res.data.data.summary)
+        setOverdueCustomers(res.data.data.customers)
+      }
+    } catch (error) {
+      console.error('Gün bazlı gecikmiş müşteri özeti yüklenirken hata:', error)
+      toast.error('Gün bazlı gecikmiş müşteri özeti yüklenirken hata oluştu')
+    } finally {
+      setLoadingOverdue(false)
     }
   }
 
@@ -100,30 +122,7 @@ const UnpaidInvoices = () => {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
-  const getOverdueBadge = (invoice) => {
-    if (!invoice.isOverdue) {
-      return <span className="badge badge-success">Güncel</span>
-    }
-    
-    if (invoice.overdueDays <= 30) {
-      return <span className="badge badge-warning">{invoice.overdueDays} gün gecikmiş</span>
-    } else if (invoice.overdueDays <= 60) {
-      return <span className="badge badge-orange">{invoice.overdueDays} gün gecikmiş</span>
-    } else {
-      return <span className="badge badge-danger">{invoice.overdueDays} gün gecikmiş</span>
-    }
-  }
-
-  const getOverdueCategoryColor = (category) => {
-    switch (category) {
-      case 'current': return 'text-success-600'
-      case 'days30': return 'text-warning-600'
-      case 'days60': return 'text-orange-600'
-      case 'days90': return 'text-danger-600'
-      case 'days90plus': return 'text-red-800'
-      default: return 'text-gray-600'
-    }
-  }
+  //
 
   return (
     <div className="space-y-6">
@@ -219,7 +218,7 @@ const UnpaidInvoices = () => {
           <h3 className="card-title">Filtreler</h3>
         </div>
         <div className="card-content">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="label">Müşteri</label>
               <select 
@@ -236,24 +235,6 @@ const UnpaidInvoices = () => {
               </select>
             </div>
             <div>
-              <label className="label">Başlangıç Tarihi</label>
-              <input
-                type="date"
-                className="input"
-                value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="label">Bitiş Tarihi</label>
-              <input
-                type="date"
-                className="input"
-                value={filters.endDate}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              />
-            </div>
-            <div>
               <label className="label">Sıralama</label>
               <select 
                 className="input"
@@ -264,6 +245,26 @@ const UnpaidInvoices = () => {
                 <option value="date">Fatura Tarihi</option>
                 <option value="amount">Tutar</option>
               </select>
+            </div>
+            <div>
+              <label className="label">Gün (Müşteri Özeti)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  className="input"
+                  value={overdueDays}
+                  onChange={(e) => setOverdueDays(Math.max(0, Number(e.target.value)))}
+                  placeholder="Örn. 30"
+                />
+                <button
+                  className="btn btn-outline"
+                  onClick={loadOverdueByDays}
+                  disabled={loadingOverdue}
+                >
+                  {loadingOverdue ? 'Yükleniyor...' : 'Uygula'}
+                </button>
+              </div>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-4">
@@ -286,140 +287,85 @@ const UnpaidInvoices = () => {
         </div>
       </div>
 
-      {/* Invoices Table */}
+      {/* Gün Bazlı Gecikmiş Müşteri Özeti */}
       <div className="card">
         <div className="card-header">
-          <h3 className="card-title">Fatura Listesi</h3>
-          <p className="card-description">
-            {pagination.total} fatura bulundu
-          </p>
+          <h3 className="card-title flex items-center">
+            <Users className="h-5 w-5 mr-2" />
+            {overdueDays}+ Gün Gecikmiş (Müşteri Bazlı)
+          </h3>
         </div>
         <div className="card-content">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+          {loadingOverdue ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600"></div>
             </div>
-          ) : invoices.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead className="table-header">
-                  <tr>
-                    <th className="table-header-cell">Müşteri</th>
-                    <th className="table-header-cell">Fatura Tarihi</th>
-                    <th className="table-header-cell">Vade Tarihi</th>
-                    <th className="table-header-cell">Tutar</th>
-                    <th className="table-header-cell">Durum</th>
-                    <th className="table-header-cell">Açıklama</th>
-                    <th className="table-header-cell">İşlemler</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((invoice) => (
-                    <tr key={invoice.id} className="table-row">
-                      <td className="table-cell">
-                        <div>
-                          <div className="font-medium">{invoice.customer?.name || 'Bilinmeyen Müşteri'}</div>
-                          {invoice.customer?.phone && (
-                            <div className="text-sm text-gray-500 flex items-center">
-                              <Phone className="h-3 w-3 mr-1" />
-                              {invoice.customer.phone}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="table-cell">{formatDate(invoice.date)}</td>
-                      <td className="table-cell">
-                        <div className="flex items-center">
-                          {invoice.dueDate ? formatDate(invoice.dueDate) : '-'}
-                        </div>
-                      </td>
-                      <td className="table-cell font-medium">
-                        {formatCurrency(invoice.amount)}
-                      </td>
-                      <td className="table-cell">
-                        {getOverdueBadge(invoice)}
-                      </td>
-                      <td className="table-cell">
-                        <div className="max-w-xs truncate" title={invoice.description}>
-                          {invoice.description}
-                        </div>
-                        {invoice.voucherNo && (
-                          <div className="text-sm text-gray-500">
-                            Evrak: {invoice.voucherNo}
-                          </div>
-                        )}
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex gap-2">
-                          <button 
-                            className="btn btn-sm btn-outline"
-                            title="Detayları Görüntüle"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          {invoice.customer?.phone && (
-                            <a 
-                              href={`tel:${invoice.customer.phone}`}
-                              className="btn btn-sm btn-outline"
-                              title="Ara"
-                            >
-                              <Phone className="h-4 w-4" />
-                            </a>
-                          )}
-                        </div>
-                      </td>
+          ) : overdueCustomers.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="flex items-center">
+                    <Users className="h-6 w-6 text-blue-600 mr-2" />
+                    <div>
+                      <p className="text-sm text-gray-600">Müşteri Sayısı</p>
+                      <p className="text-lg font-semibold">{overdueSummary?.customerCount || overdueCustomers.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="flex items-center">
+                    <DollarSign className="h-6 w-6 text-orange-600 mr-2" />
+                    <div>
+                      <p className="text-sm text-gray-600">Toplam Gecikmiş Tutar</p>
+                      <p className="text-lg font-semibold">{formatCurrency(overdueSummary?.totalOverdueAmount || 0)}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <div className="flex items-center">
+                    <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
+                    <div>
+                      <p className="text-sm text-gray-600">Gün Eşiği</p>
+                      <p className="text-lg font-semibold">{overdueDays} gün</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead className="table-header">
+                    <tr>
+                      <th className="table-header-cell">Müşteri</th>
+                      <th className="table-header-cell">Kod</th>
+                      <th className="table-header-cell">Gecikmiş Fatura Adedi</th>
+                      <th className="table-header-cell">Maks. Gecikme (gün)</th>
+                      <th className="table-header-cell">Gecikmiş Tutar</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {overdueCustomers.map((row, idx) => (
+                      <tr key={idx} className="table-row">
+                        <td className="table-cell">{row.customer?.name}</td>
+                        <td className="table-cell">{row.customer?.code}</td>
+                        <td className="table-cell">{row.overdueInvoiceCount}</td>
+                        <td className="table-cell">{row.maxOverdueDays}</td>
+                        <td className="table-cell font-medium">{formatCurrency(row.overdueAmount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
-            <div className="text-center py-12">
-              <div className="text-gray-400 mb-4">
-                <FileText className="mx-auto h-12 w-12" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Fatura bulunamadı</h3>
-              <p className="text-gray-500">Seçilen kriterlere uygun ödenmemiş fatura bulunmuyor</p>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {pagination.pages > 1 && (
-            <div className="flex justify-center mt-6">
-              <div className="flex gap-2">
-                <button
-                  className="btn btn-sm btn-outline"
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page <= 1}
-                >
-                  Önceki
-                </button>
-                
-                {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                  const page = i + 1
-                  return (
-                    <button
-                      key={page}
-                      className={`btn btn-sm ${pagination.page === page ? 'btn-primary' : 'btn-outline'}`}
-                      onClick={() => handlePageChange(page)}
-                    >
-                      {page}
-                    </button>
-                  )
-                })}
-                
-                <button
-                  className="btn btn-sm btn-outline"
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page >= pagination.pages}
-                >
-                  Sonraki
-                </button>
-              </div>
+            <div className="text-center py-8">
+              <Users className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <p className="text-gray-500">Seçilen gün eşiğine göre gecikmiş müşteri bulunmuyor</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Fatura Listesi kaldırıldı */}
     </div>
   )
 }

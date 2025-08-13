@@ -118,6 +118,22 @@ const CustomerDetail = () => {
     return new Date(dateString).toLocaleDateString('tr-TR');
   };
 
+  const calculateDaysBetween = (startDateString, endDateInput) => {
+    const start = new Date(startDateString).getTime();
+    const end = endDateInput instanceof Date ? endDateInput.getTime() : new Date(endDateInput).getTime();
+    const diffMs = Math.max(0, end - start);
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  const getElapsedDays = (invoice) => {
+    // Ödenmiş faturalar için: fatura tarihinden son ödeme tarihine kadar
+    // Ödenmemiş faturalar için: fatura tarihinden bugüne kadar
+    const endDate = invoice.status === 'paid' && invoice.lastPaymentDate
+      ? invoice.lastPaymentDate
+      : new Date();
+    return calculateDaysBetween(invoice.date, endDate);
+  };
+
   const getStatusBadge = (invoice) => {
     // Belge türüne göre durum belirleme
     if (invoice.documentType) {
@@ -259,10 +275,18 @@ const CustomerDetail = () => {
                 </span>
               </div>
               {summary && (
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="text-gray-600 font-medium">Ödenmemiş Fatura Toplamı</span>
-                  <span className="text-lg font-bold text-red-600">{formatCurrency(summary.totalUnpaidAmount)}</span>
-                </div>
+                <>
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <span className="text-gray-600 font-medium">Ödenmemiş Fatura Toplamı</span>
+                    <span className="text-lg font-bold text-red-600">{formatCurrency(summary.totalUnpaidAmount)}</span>
+                  </div>
+                  {summary.weightedDays > 0 && (
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-gray-600 font-medium">Ağırlıklı Gün</span>
+                      <span className="text-lg font-bold text-orange-600">{summary.weightedDays} gün</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -341,6 +365,7 @@ const CustomerDetail = () => {
                    <tr>
                      <th>Fatura Tarihi</th>
                      <th>Vade Tarihi</th>
+                     <th>Geçen Gün</th>
                      <th>Tutar</th>
                      <th>Durum</th>
                      <th>Son Ödeme</th>
@@ -352,6 +377,7 @@ const CustomerDetail = () => {
                      <tr key={invoice.id}>
                        <td>{formatDate(invoice.date)}</td>
                        <td>{invoice.dueDate ? formatDate(invoice.dueDate) : '-'}</td>
+                       <td>{getElapsedDays(invoice)} gün</td>
                        <td className="font-medium">{formatCurrency(invoice.amount)}</td>
                        <td>{getStatusBadge(invoice)}</td>
                        <td>

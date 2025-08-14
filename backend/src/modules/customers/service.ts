@@ -7,13 +7,28 @@ export class CustomerService extends BaseService {
   /**
    * Tüm müşterileri getir (sayfalama ile)
    */
-  async getCustomers(params: PaginationParams, userId?: string): Promise<ApiResponse<PaginatedResponse<Customer>>> {
+  async getCustomers(
+    params: PaginationParams & {
+      address?: string;
+      accountType?: string;
+      tag1?: string;
+      tag2?: string;
+      isActive?: boolean;
+    },
+    userId?: string
+  ): Promise<ApiResponse<PaginatedResponse<Customer>>> {
     return this.safeDatabaseOperation(async () => {
       const { page, limit, sortBy, sortOrder } = this.validatePaginationParams(params);
+      const { address, accountType, tag1, tag2, isActive } = params;
       const skip = (page - 1) * limit;
 
-      // Kullanıcıya özel filtreleme
-      const whereClause = userId ? { userId } : {};
+      // Kullanıcıya ve filtrelere özel sorgu
+      const whereClause: any = userId ? { userId } : {};
+      if (address) whereClause.address = { contains: address };
+      if (accountType) whereClause.accountType = { contains: accountType };
+      if (tag1) whereClause.tag1 = { contains: tag1 };
+      if (tag2) whereClause.tag2 = { contains: tag2 };
+      if (typeof isActive === 'boolean') whereClause.isActive = isActive;
 
       const [customers, total] = await Promise.all([
         this.prisma.customer.findMany({
@@ -21,15 +36,17 @@ export class CustomerService extends BaseService {
           skip,
           take: limit,
           orderBy: { [sortBy]: sortOrder },
-          include: {
-            transactions: {
-              select: {
-                id: true,
-                amount: true,
-                type: true,
-                date: true
-              }
-            },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            address: true,
+            type: true,
+            accountType: true,
+            tag1: true,
+            tag2: true,
+            isActive: true,
+            dueDays: true,
             balance: {
               select: {
                 totalDebit: true,

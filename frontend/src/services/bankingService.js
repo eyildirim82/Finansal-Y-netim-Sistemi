@@ -1,148 +1,56 @@
 import apiClient from './apiClient';
 
 const bankingService = {
-  // Otomatik email çekme
-  fetchEmails: async () => {
-    const res = await apiClient.post('/banking/fetch-emails');
-    return res.data;
-  },
-
-  // Email bağlantı testi
-  testEmailConnection: async () => {
-    const res = await apiClient.post('/banking/test-connection');
-    return res.data;
-  },
-
-  // Eşleştirme istatistikleri
-  getMatchingStats: async () => {
-    const res = await apiClient.get('/banking/matching-stats');
-    return res.data;
-  },
-
-  // Otomatik eşleştirme çalıştır
-  runAutoMatching: async (limit = 100) => {
-    const res = await apiClient.post('/banking/run-auto-matching', { limit });
-    return res.data;
-  },
-
-  // Banka işlemleri
-  getTransactions: async () => {
-    const res = await apiClient.get('/banking/transactions');
-    return res.data;
-  },
-
+  // Temel işlemler
+  getTransactions: () => apiClient.get('/banking/transactions'),
+  getUnmatchedPayments: () => apiClient.get('/banking/unmatched'),
+  getMatchingStats: () => apiClient.get('/banking/matching-stats'),
+  getEmailStats: () => apiClient.get('/banking/email-stats'),
+  getPDFTransactions: () => apiClient.get('/banking/pdf-transactions'),
+  
+  // Email işlemleri
+  fetchEmails: () => apiClient.post('/banking/fetch-emails'),
+  fetchEmailsByDateRange: (startDate, endDate) => 
+    apiClient.post('/banking/fetch-emails-by-date', { startDate, endDate }),
+  getEmailSettings: () => apiClient.get('/banking/email-settings'),
+  updateEmailSettings: (settings) => apiClient.put('/banking/email-settings', settings),
+  testEmailConnection: () => apiClient.post('/banking/test-connection'),
+  startRealtimeMonitoring: () => apiClient.post('/banking/start-monitoring'),
+  stopRealtimeMonitoring: () => apiClient.post('/banking/stop-monitoring'),
+  
+  // Eşleştirme işlemleri
+  runAutoMatching: () => apiClient.post('/banking/auto-matching'),
+  matchPayment: (data) => apiClient.post('/banking/match-payment', data),
+  
   // PDF işlemleri
-  getPDFTransactions: async () => {
-    const res = await apiClient.get('/banking/pdf-transactions');
-    return res.data;
-  },
-
-  // Eşleşmeyen ödemeler
-  getUnmatchedPayments: async () => {
-    const res = await apiClient.get('/banking/unmatched');
-    return res.data;
-  },
-
-  // Manuel eşleştirme
-  matchPayment: async ({ transactionId, customerId, amount }) => {
-    const res = await apiClient.post('/banking/match', { transactionId, customerId, amount });
-    return res.data;
-  },
-
-  // Yeni endpoint'ler
-  // Email istatistikleri
-  getEmailStats: async () => {
-    const res = await apiClient.get('/banking/email-stats');
-    return res.data;
-  },
-
-  // Tarih aralığında email çekme
-  fetchEmailsByDateRange: async (startDate, endDate) => {
-    const res = await apiClient.post('/banking/fetch-emails-by-date', { startDate, endDate });
-    return res.data;
-  },
-
-  // Realtime monitoring
-  startRealtimeMonitoring: async () => {
-    const res = await apiClient.post('/banking/start-monitoring');
-    return res.data;
-  },
-
-  stopRealtimeMonitoring: async () => {
-    const res = await apiClient.post('/banking/stop-monitoring');
-    return res.data;
-  },
-
-  // Email ayarlarını güncelle
-  updateEmailSettings: async (settings) => {
-    const res = await apiClient.put('/banking/email-settings', settings);
-    return res.data;
-  },
-
-  // Email ayarlarını getir
-  getEmailSettings: async () => {
-    const res = await apiClient.get('/banking/email-settings');
-    return res.data;
-  },
-
-  // PDF işlemleri
-  // PDF hesap hareketlerini parse et
-  parsePDF: async (file) => {
+  parsePDF: (file) => {
     const formData = new FormData();
     formData.append('pdf', file);
-    
-    const res = await apiClient.post('/banking/parse-pdf', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    return apiClient.post('/banking/parse-pdf', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
-    return res.data;
   },
-
-  // PDF'den çıkarılan işlemleri kaydet
-  savePDFTransactions: async (transactions, accountInfo) => {
-    const res = await apiClient.post('/banking/save-pdf-transactions', {
-      transactions,
-      accountInfo
-    });
-    return res.data;
-  },
-
-  // İşlem silme işlemleri
-  // Tek işlem sil
-  deleteTransaction: async (transactionId) => {
-    const res = await apiClient.delete(`/banking/transactions/${transactionId}`);
-    return res.data;
-  },
-
-  // Toplu işlem silme
-  deleteTransactions: async (filters) => {
-    const res = await apiClient.delete('/banking/transactions', { data: filters });
-    return res.data;
-  },
-
-  // Eski işlemleri temizle
-  cleanupOldTransactions: async (beforeDate, dryRun = false) => {
-    const res = await apiClient.post('/banking/cleanup-old-transactions', {
-      beforeDate,
-      dryRun
-    });
-    return res.data;
-  },
-
-  // Yeni ETL PDF işleme
-  processPDFETL: async (file) => {
+  savePDFTransactions: (transactions, accountInfo) => 
+    apiClient.post('/banking/save-pdf-transactions', { transactions, accountInfo }),
+  processPDFETL: (file) => {
     const formData = new FormData();
     formData.append('pdf', file);
-    
-    const res = await apiClient.post('/banking/process-pdf-etl', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    return apiClient.post('/banking/process-pdf-etl', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
-    return res.data;
   },
+  
+  // İşlem silme
+  deleteTransaction: (id) => apiClient.delete(`/banking/transactions/${id}`),
+  deleteTransactions: (filters) => apiClient.post('/banking/delete-transactions', filters),
+  cleanupOldTransactions: (date, dryRun = true) => 
+    apiClient.post('/banking/cleanup-transactions', { date, dryRun }),
+  
+  // Eksik işlem analizi
+  getMissingTransactions: () => apiClient.get('/banking/missing-transactions')
 };
+
+export default bankingService;
 
 // Eksik işlemleri getir
 export const getMissingTransactions = async () => {
@@ -154,5 +62,3 @@ export const getMissingTransactions = async () => {
     throw error;
   }
 };
-
-export default bankingService;

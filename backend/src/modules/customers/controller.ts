@@ -22,7 +22,10 @@ export class CustomerController {
         sortOrder: sortOrder as 'asc' | 'desc'
       };
 
-      const result = await this.customerService.getCustomers(params);
+      // Kullanıcı ID'sini request'ten al
+      const userId = req.user?.id;
+
+      const result = await this.customerService.getCustomers(params, userId);
       
       if (result.success) {
         return res.json(result);

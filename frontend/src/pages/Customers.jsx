@@ -127,9 +127,9 @@ const Customers = () => {
 
   // İstatistik hesaplamaları
   const calculateStats = () => {
-    if (!customersData?.data) return { total: 0, active: 0, debt: 0, avgBalance: 0 };
+    if (!customersData?.data?.data) return { total: 0, active: 0, debt: 0, avgBalance: 0 };
     
-    const customers = customersData.data;
+    const customers = customersData.data.data;
     const total = customers.length;
     const active = customers.filter(c => c.isActive).length;
     const debt = customers.filter(c => c.balance && c.balance.netBalance < 0).length;
@@ -206,9 +206,9 @@ const Customers = () => {
 
       {/* Müşteri Tablosu */}
       <DataTable
-        data={customersData?.data || []}
+        data={customersData?.data?.data || []}
         columns={columns}
-        pagination={customersData?.pagination}
+        pagination={customersData?.data?.pagination}
         onPageChange={handlePageChange}
         onSortChange={handleSortChange}
         loading={isLoading}

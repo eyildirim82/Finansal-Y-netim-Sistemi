@@ -2,18 +2,7 @@ import React, { useEffect, useState } from 'react';
 import bankingService from '../services/bankingService';
 import customerService from '../services/customerService';
 import { getMissingTransactions } from '../services/bankingService';
-
-// Modüler bileşenler
-import {
-  AutoOperationsPanel,
-  EmailStatsPanel,
-  CriticalWarningAlert,
-  TabNavigation,
-  TransactionTable,
-  UnmatchedTransactionsTable,
-  PdfTransactionsTable,
-  MissingTransactionsPanel
-} from '../components/banking';
+import { formatCurrency } from '../utils/formatCurrency';
 
 const Banking = () => {
   const [transactions, setTransactions] = useState([]);
@@ -61,21 +50,14 @@ const Banking = () => {
 
   useEffect(() => {
     fetchData();
-  }, []); // Sadece component mount olduğunda çalışsın
-
-  useEffect(() => {
     fetchEmailStats();
-  }, []); // Email stats ayrı useEffect'te
-
-  useEffect(() => {
     fetchEmailSettings();
-  }, []); // Email settings ayrı useEffect'te
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       console.log('🔄 Veri yükleniyor...');
-      
       const [
         transactionsRes,
         unmatchedRes,
@@ -297,322 +279,416 @@ const Banking = () => {
     }
   };
 
-  // PDF işlemleri
-  const handlePdfFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type === 'application/pdf') {
-      setSelectedPdfFile(file);
-    } else {
-      alert('Lütfen geçerli bir PDF dosyası seçin');
-    }
-  };
-
-  const handlePdfUpload = async () => {
-    if (!selectedPdfFile) {
-      alert('Lütfen bir PDF dosyası seçin');
-      return;
-    }
-
-    try {
-      setPdfLoading(true);
-      const result = await bankingService.parsePDF(selectedPdfFile);
-      
-      if (result.success) {
-        setPdfData(result.data);
-        setShowPdfModal(true);
-        console.log('📄 PDF parse edildi:', result.data);
-      } else {
-        alert(`❌ PDF parse edilemedi: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('PDF parsing hatası:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Bilinmeyen hata';
-      alert(`❌ PDF parse edilirken hata oluştu: ${errorMessage}`);
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  const handleSavePdfTransactions = async () => {
-    if (!pdfData) return;
-
-    try {
-      setPdfLoading(true);
-      const result = await bankingService.savePDFTransactions(
-        pdfData.transactions,
-        pdfData.accountInfo
-      );
-      
-      alert(`✅ ${result.data.saved} işlem kaydedildi, ${result.data.duplicates} duplikasyon`);
-      
-      // Verileri yenile
-      await fetchData();
-      setShowPdfModal(false);
-      setPdfData(null);
-      setSelectedPdfFile(null);
-    } catch (error) {
-      console.error('PDF işlem kaydetme hatası:', error);
-      alert('❌ İşlemler kaydedilirken hata oluştu');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  // Yeni ETL PDF işleme fonksiyonu
-  const handlePdfETL = async () => {
-    if (!selectedPdfFile) {
-      alert('Lütfen bir PDF dosyası seçin');
-      return;
-    }
-
-    try {
-      setPdfLoading(true);
-      const result = await bankingService.processPDFETL(selectedPdfFile);
-      
-      alert(`✅ ${result.data.processedCount} işlem başarıyla işlendi ve kaydedildi`);
-      
-      // Verileri yenile
-      await fetchData();
-      setSelectedPdfFile(null);
-    } catch (error) {
-      console.error('PDF ETL işleme hatası:', error);
-      alert(`❌ PDF ETL işleme hatası: ${error.response?.data?.message || error.message}`);
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  const openMatchModal = (tx) => {
-    setSelectedTx(tx);
-    setCustomerId('');
-    setAmount(tx.amount);
-    setShowModal(true);
-    setMatchMsg('');
-  };
-
-  const handleMatch = async (e) => {
-    e.preventDefault();
-    if (!selectedTx || !customerId) return;
-    try {
-      await bankingService.matchPayment({ transactionId: selectedTx.id, customerId, amount });
-      setMatchMsg('Eşleştirme başarılı!');
-      setShowModal(false);
-      fetchUnmatched();
-      fetchData();
-    } catch {
-      setMatchMsg('Eşleştirme başarısız!');
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'CRITICAL': return 'text-red-600 bg-red-100';
-      case 'HIGH': return 'text-orange-600 bg-orange-100';
-      case 'LOW': return 'text-yellow-600 bg-yellow-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getSeverityIcon = (severity) => {
-    switch (severity) {
-      case 'CRITICAL': return '🔴';
-      case 'HIGH': return '🟡';
-      case 'LOW': return '🟢';
-      default: return '⚪';
-    }
-  };
-
-  // İşlem silme fonksiyonları
-  const handleDeleteTransaction = async (transactionId) => {
-    if (!confirm('Bu işlemi silmek istediğinizden emin misiniz?')) {
-      return;
-    }
-
-    try {
-      setDeleteLoading(true);
-      await bankingService.deleteTransaction(transactionId);
-      alert('✅ İşlem başarıyla silindi');
-      await fetchData();
-    } catch (error) {
-      console.error('İşlem silme hatası:', error);
-      alert('❌ İşlem silinirken hata oluştu');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  const handleBulkDelete = async (filters) => {
-    if (!confirm('Seçili işlemleri silmek istediğinizden emin misiniz?')) {
-      return;
-    }
-
-    try {
-      setDeleteLoading(true);
-      const result = await bankingService.deleteTransactions(filters);
-      alert(`✅ ${result.data.deletedCount} işlem başarıyla silindi`);
-      await fetchData();
-      setShowBulkDeleteModal(false);
-    } catch (error) {
-      console.error('Toplu silme hatası:', error);
-      alert('❌ İşlemler silinirken hata oluştu');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  const handleCleanupOldTransactions = async () => {
-    if (!cleanupDate) {
-      alert('Lütfen bir tarih seçin');
-      return;
-    }
-
-    try {
-      setDeleteLoading(true);
-      const result = await bankingService.cleanupOldTransactions(cleanupDate, cleanupDryRun);
-      
-      if (cleanupDryRun) {
-        alert(`DRY RUN: ${result.data.deletedCount} işlem silinecek (${result.data.totalAmount.toLocaleString('tr-TR')} TL)`);
-      } else {
-        alert(`✅ ${result.data.deletedCount} eski işlem başarıyla silindi`);
-        await fetchData();
-        setShowCleanupModal(false);
-      }
-    } catch (error) {
-      console.error('Eski işlem temizleme hatası:', error);
-      alert('❌ Eski işlemler silinirken hata oluştu');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold mb-4">Banka İşlemleri</h2>
       
-      {/* Kritik Uyarı */}
-      <CriticalWarningAlert missingTransactionsSummary={missingTransactionsSummary} />
-
-      {/* Otomatik İşlemler Paneli */}
-      <AutoOperationsPanel
-        emailLoading={emailLoading}
-        autoMatchingLoading={autoMatchingLoading}
-        isMonitoring={isMonitoring}
-        matchingStats={matchingStats}
-        onFetchEmails={handleFetchEmails}
-        onShowDateRangeModal={() => setShowDateRangeModal(true)}
-        onFetchLastWeekEmails={handleFetchLastWeekEmails}
-        onToggleMonitoring={handleToggleMonitoring}
-        onTestConnection={handleTestConnection}
-        onShowEmailSettings={() => setShowEmailSettings(true)}
-        onRunAutoMatching={handleRunAutoMatching}
-        onShowMissingTransactions={() => setShowMissingTransactions(!showMissingTransactions)}
-        showMissingTransactions={showMissingTransactions}
-        selectedPdfFile={selectedPdfFile}
-        pdfLoading={pdfLoading}
-        onPdfFileSelect={handlePdfFileSelect}
-        onPdfUpload={handlePdfUpload}
-        onPdfETL={handlePdfETL}
-        onShowBulkDeleteModal={() => setShowBulkDeleteModal(true)}
-        onShowCleanupModal={() => setShowCleanupModal(true)}
-      />
-
-      {/* Email İstatistikleri */}
-      <EmailStatsPanel emailStats={emailStats} />
-
-      {/* Tab Navigasyonu */}
-      <TabNavigation
-        tab={tab}
-        pdfTransactions={pdfTransactions}
-        onTabChange={setTab}
-        onFetchData={fetchData}
-        onFetchUnmatched={fetchUnmatched}
-      />
-      
-      {/* İçerik Tablosu */}
-      {loading ? (
-        <div>Yükleniyor...</div>
-      ) : tab === 'all' ? (
-        <TransactionTable
-          transactions={transactions}
-          deleteLoading={deleteLoading}
-          onDeleteTransaction={handleDeleteTransaction}
-        />
-      ) : tab === 'unmatched' ? (
-        <UnmatchedTransactionsTable
-          unmatched={unmatched}
-          deleteLoading={deleteLoading}
-          onDeleteTransaction={handleDeleteTransaction}
-          onOpenMatchModal={openMatchModal}
-        />
-      ) : tab === 'pdf' ? (
-        <PdfTransactionsTable
-          pdfTransactions={pdfTransactions}
-          deleteLoading={deleteLoading}
-          onDeleteTransaction={handleDeleteTransaction}
-        />
-      ) : null}
-
-      {/* Eksik İşlemler Paneli */}
-      <MissingTransactionsPanel
-        showMissingTransactions={showMissingTransactions}
-        missingTransactions={missingTransactions}
-        missingTransactionsSummary={missingTransactionsSummary}
-        getSeverityColor={getSeverityColor}
-        getSeverityIcon={getSeverityIcon}
-      />
-
-      {/* Eşleştirme Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg">
-            <h3 className="text-lg font-bold mb-4">İşlem Eşleştir</h3>
-            <form onSubmit={handleMatch}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Müşteri</label>
-                <select
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  required
-                >
-                  <option value="">Müşteri seçin</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Tutar</label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full p-2 border rounded"
-                  required
-                />
-              </div>
-              {matchMsg && <p className="text-sm mb-4">{matchMsg}</p>}
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Eşleştir
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                >
-                  İptal
-                </button>
-              </div>
-            </form>
+      {/* Eksik İşlem Uyarısı */}
+      {missingTransactionsSummary.severity === 'CRITICAL' && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center">
+            <span className="text-2xl mr-2">🔴</span>
+            <div>
+              <h3 className="text-red-800 font-semibold">Kritik Eksik İşlem Uyarısı!</h3>
+              <p className="text-red-700">
+                Toplam {missingTransactionsSummary.totalDifference?.toLocaleString('tr-TR')} TL bakiye farkı tespit edildi.
+                {missingTransactionsSummary.missingTransactionsCount} günde eksik işlem bulunuyor.
+              </p>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Otomatik İşlemler Bölümü */}
+      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+        <h3 className="text-lg font-semibold mb-3">🔄 Otomatik İşlemler</h3>
+        <div className="flex flex-wrap gap-3">
+                     <button 
+             onClick={handleFetchEmails} 
+             disabled={emailLoading} 
+             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+           >
+             {emailLoading ? '📧 Email Çekiliyor...' : '📧 Email Çek'}
+           </button>
+          <button 
+            onClick={() => setShowDateRangeModal(true)} 
+            className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+          >
+            📅 Tarih Aralığı Çek
+          </button>
+                     <button 
+             onClick={handleFetchLastWeekEmails} 
+             disabled={emailLoading} 
+             className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+           >
+             {emailLoading ? '📧 Çekiliyor...' : '📅 Son 1 Hafta'}
+           </button>
+                     <button 
+             onClick={handleToggleMonitoring} 
+             className={`px-4 py-2 text-white rounded ${
+               isMonitoring ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+             }`}
+           >
+             {isMonitoring ? '🛑 Monitoring Durdur' : '🔄 Monitoring Başlat'}
+           </button>
+                     <button 
+             onClick={handleTestConnection} 
+             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+           >
+             🔗 Bağlantı Testi
+           </button>
+          <button 
+            onClick={() => setShowEmailSettings(true)} 
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            ⚙️ Email Ayarları
+          </button>
+                     <button 
+             onClick={handleRunAutoMatching} 
+             disabled={autoMatchingLoading} 
+             className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+           >
+             {autoMatchingLoading ? '🤖 Eşleştiriliyor...' : '🤖 Otomatik Eşleştir'}
+           </button>
+          <button 
+            onClick={() => setShowMissingTransactions(!showMissingTransactions)} 
+            className={`px-4 py-2 rounded ${
+              showMissingTransactions 
+                ? 'bg-gray-600 hover:bg-gray-700 text-white' 
+                : 'bg-orange-600 hover:bg-orange-700 text-white'
+            }`}
+          >
+            {showMissingTransactions ? '📊 İşlemleri Gizle' : '🔍 Eksik İşlemleri Göster'}
+          </button>
+        </div>
+
+        {/* İstatistikler */}
+        {matchingStats && (
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="bg-white p-3 rounded shadow">
+              <div className="font-bold text-blue-600">Toplam İşlem</div>
+              <div>{matchingStats.total}</div>
+            </div>
+            <div className="bg-white p-3 rounded shadow">
+              <div className="font-bold text-green-600">Eşleşen</div>
+              <div>{matchingStats.matched}</div>
+            </div>
+            <div className="bg-white p-3 rounded shadow">
+              <div className="font-bold text-red-600">Eşleşmeyen</div>
+              <div>{matchingStats.unmatched}</div>
+            </div>
+            <div className="bg-white p-3 rounded shadow">
+              <div className="font-bold text-purple-600">Eşleşme Oranı</div>
+              <div>%{matchingStats.matchRate?.toFixed(1)}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Email İstatistikleri */}
+      {emailStats && (
+        <div className="mb-4 p-3 bg-green-50 rounded border">
+          <h4 className="font-semibold text-green-800">📧 Email Durumu</h4>
+          <div className="text-sm text-green-700 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>Toplam Email: {emailStats.totalMessages}</div>
+            <div>Okunmamış: {emailStats.unseenMessages}</div>
+            <div>Bağlantı: {emailStats.isConnected ? '✅ Aktif' : '❌ Kapalı'}</div>
+            <div>Ortalama: {emailStats.metrics?.avgProcessingTime?.toFixed(2)}ms</div>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-4 flex gap-2">
+        <button 
+          onClick={() => { setTab('all'); fetchData(); }} 
+          className={tab === 'all' ? 'font-bold underline' : ''}
+        >
+          Tüm İşlemler
+        </button>
+        <button 
+          onClick={() => { setTab('unmatched'); fetchUnmatched(); }} 
+          className={tab === 'unmatched' ? 'font-bold underline' : ''}
+        >
+          Eşleşmeyen Ödemeler
+        </button>
+        <button 
+          onClick={() => { setTab('pdf'); }} 
+          className={tab === 'pdf' ? 'font-bold underline' : ''}
+        >
+          PDF İşlemleri ({pdfTransactions.length})
+        </button>
+      </div>
+
+      {loading ? (
+        <div>Yükleniyor...</div>
+      ) : tab === 'all' ? (
+        <div>
+          <h3>Tüm İşlemler ({transactions.length})</h3>
+          <p>İşlem listesi burada görüntülenecek...</p>
+        </div>
+      ) : tab === 'unmatched' ? (
+        <div>
+          <h3>Eşleşmeyen Ödemeler ({unmatched.length})</h3>
+          <p>Eşleşmeyen ödemeler burada görüntülenecek...</p>
+        </div>
+      ) : tab === 'pdf' ? (
+        <div>
+          <h3>PDF İşlemleri ({pdfTransactions.length})</h3>
+          <p>PDF işlemleri burada görüntülenecek...</p>
+        </div>
+             ) : null}
+
+       {/* Eksik İşlemler Bölümü */}
+       {showMissingTransactions && (
+         <div className="mb-8">
+           <h2 className="text-xl font-semibold text-gray-800 mb-4">🔍 Eksik İşlem Analizi</h2>
+           
+           {/* Özet Kartları */}
+           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+             <div className="bg-white p-4 rounded-lg shadow border">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm text-gray-600">Toplam Fark</p>
+                   <p className="text-2xl font-bold text-red-600">
+                     {missingTransactionsSummary.totalDifference?.toLocaleString('tr-TR')} TL
+                   </p>
+                 </div>
+                 <span className="text-3xl">💰</span>
+               </div>
+             </div>
+             
+             <div className="bg-white p-4 rounded-lg shadow border">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm text-gray-600">Kritik Sorunlar</p>
+                   <p className="text-2xl font-bold text-red-600">
+                     {missingTransactionsSummary.criticalIssues || 0}
+                   </p>
+                 </div>
+                 <span className="text-3xl">⚠️</span>
+               </div>
+             </div>
+             
+             <div className="bg-white p-4 rounded-lg shadow border">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm text-gray-600">Eksik Günler</p>
+                   <p className="text-2xl font-bold text-orange-600">
+                     {missingTransactionsSummary.missingTransactionsCount || 0}
+                   </p>
+                 </div>
+                 <span className="text-3xl">📅</span>
+               </div>
+             </div>
+             
+             <div className="bg-white p-4 rounded-lg shadow border">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-sm text-gray-600">Durum</p>
+                   <p className={`text-lg font-bold ${
+                     missingTransactionsSummary.severity === 'CRITICAL' ? 'text-red-600' :
+                     missingTransactionsSummary.severity === 'HIGH' ? 'text-orange-600' :
+                     missingTransactionsSummary.severity === 'LOW' ? 'text-yellow-600' : 'text-gray-600'
+                   }`}>
+                     {missingTransactionsSummary.severity === 'CRITICAL' ? '🔴' :
+                      missingTransactionsSummary.severity === 'HIGH' ? '🟡' :
+                      missingTransactionsSummary.severity === 'LOW' ? '🟢' : '⚪'} {missingTransactionsSummary.severity}
+                   </p>
+                 </div>
+                 <span className="text-3xl">📊</span>
+               </div>
+             </div>
+           </div>
+
+           {/* Eksik İşlem Detayları */}
+           {missingTransactions.length > 0 ? (
+             <div className="bg-white rounded-lg shadow border">
+               <div className="p-4 border-b">
+                 <h3 className="text-lg font-semibold text-gray-800">Günlük Eksik İşlem Detayları</h3>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full">
+                   <thead className="bg-gray-50">
+                     <tr>
+                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Tarih</th>
+                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Tahmini Eksik Tutar</th>
+                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Yön</th>
+                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Güven</th>
+                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Kritik Sorunlar</th>
+                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Toplam Fark</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-200">
+                     {missingTransactions.map((item, index) => (
+                       <tr key={index} className="hover:bg-gray-50">
+                         <td className="px-4 py-3 text-sm text-gray-900">
+                           {new Date(item.date).toLocaleDateString('tr-TR')}
+                         </td>
+                         <td className="px-4 py-3 text-sm font-semibold text-red-600">
+                           {item.estimatedAmount.toLocaleString('tr-TR')} TL
+                         </td>
+                         <td className="px-4 py-3 text-sm">
+                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                             item.direction === 'IN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                           }`}>
+                             {item.direction === 'IN' ? '📥 Gelen' : '📤 Giden'}
+                           </span>
+                         </td>
+                         <td className="px-4 py-3 text-sm">
+                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                             {item.confidence}
+                           </span>
+                         </td>
+                         <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                           {item.criticalGaps}
+                         </td>
+                         <td className="px-4 py-3 text-sm text-gray-600">
+                           {item.totalGaps}
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             </div>
+           ) : (
+             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+               <div className="flex items-center">
+                 <span className="text-2xl mr-2">✅</span>
+                 <div>
+                   <h3 className="text-green-800 font-semibold">Eksik İşlem Tespit Edilmedi</h3>
+                   <p className="text-green-700">Tüm işlemler doğru şekilde kaydedilmiş görünüyor.</p>
+                 </div>
+               </div>
+             </div>
+           )}
+         </div>
+       )}
+
+       {/* Email Ayarları Modal */}
+       {showEmailSettings && emailSettings && (
+         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+           <div className="bg-white p-6 rounded-lg w-96">
+             <h3 className="text-lg font-bold mb-4">Email Ayarları</h3>
+             <form onSubmit={(e) => {
+               e.preventDefault();
+               const formData = new FormData(e.target);
+               const settings = {
+                 host: formData.get('host'),
+                 port: parseInt(formData.get('port')),
+                 user: formData.get('user'),
+                 pass: formData.get('pass'),
+                 secure: true
+               };
+               handleUpdateEmailSettings(settings);
+             }}>
+               <div className="mb-4">
+                 <label className="block text-sm font-medium mb-2">Host</label>
+                 <input 
+                   name="host" 
+                   type="text" 
+                   defaultValue={emailSettings.host} 
+                   className="w-full p-2 border rounded" 
+                   placeholder="imap.yapikredi.com.tr" 
+                   required 
+                 />
+               </div>
+               <div className="mb-4">
+                 <label className="block text-sm font-medium mb-2">Port</label>
+                 <input 
+                   name="port" 
+                   type="number" 
+                   defaultValue={emailSettings.port} 
+                   className="w-full p-2 border rounded" 
+                   placeholder="993" 
+                   required 
+                 />
+               </div>
+               <div className="mb-4">
+                 <label className="block text-sm font-medium mb-2">Kullanıcı Adı</label>
+                 <input 
+                   name="user" 
+                   type="text" 
+                   defaultValue={emailSettings.user} 
+                   className="w-full p-2 border rounded" 
+                   placeholder="email@yapikredi.com.tr" 
+                   required 
+                 />
+               </div>
+               <div className="mb-4">
+                 <label className="block text-sm font-medium mb-2">Şifre</label>
+                 <input 
+                   name="pass" 
+                   type="password" 
+                   defaultValue={emailSettings.pass} 
+                   className="w-full p-2 border rounded" 
+                   placeholder="Email şifresi" 
+                   required 
+                 />
+               </div>
+               <div className="flex gap-2">
+                 <button 
+                   type="submit" 
+                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                 >
+                   Kaydet
+                 </button>
+                 <button 
+                   type="button" 
+                   onClick={() => setShowEmailSettings(false)} 
+                   className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                 >
+                   İptal
+                 </button>
+               </div>
+             </form>
+           </div>
+         </div>
+       )}
+
+       {/* Tarih Aralığı Modal */}
+       {showDateRangeModal && (
+         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+           <div className="bg-white p-6 rounded-lg w-96">
+             <h3 className="text-lg font-bold mb-4">Tarih Aralığında Email Çek</h3>
+             <div className="mb-4">
+               <label className="block text-sm font-medium mb-2">Başlangıç Tarihi</label>
+               <input 
+                 type="date" 
+                 value={startDate} 
+                 onChange={(e) => setStartDate(e.target.value)} 
+                 className="w-full p-2 border rounded" 
+                 required 
+               />
+             </div>
+             <div className="mb-4">
+               <label className="block text-sm font-medium mb-2">Bitiş Tarihi</label>
+               <input 
+                 type="date" 
+                 value={endDate} 
+                 onChange={(e) => setEndDate(e.target.value)} 
+                 className="w-full p-2 border rounded" 
+                 required 
+               />
+             </div>
+             <div className="flex gap-2">
+               <button 
+                 onClick={handleFetchEmailsByDateRange} 
+                 disabled={dateRangeLoading} 
+                 className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+               >
+                 {dateRangeLoading ? 'Çekiliyor...' : 'Email Çek'}
+               </button>
+               <button 
+                 onClick={() => setShowDateRangeModal(false)} 
+                 className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+               >
+                 İptal
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
     </div>
   );
 };

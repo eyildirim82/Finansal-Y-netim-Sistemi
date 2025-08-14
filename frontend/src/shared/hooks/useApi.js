@@ -5,12 +5,19 @@ import toast from 'react-hot-toast';
 // API istemcisi
 const apiClient = {
   get: async (url, config = {}) => {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...config.headers,
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`/api${url}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...config.headers,
-      },
+      headers,
       ...config,
     });
     
@@ -22,12 +29,19 @@ const apiClient = {
   },
 
   post: async (url, data, config = {}) => {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...config.headers,
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`/api${url}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...config.headers,
-      },
+      headers,
       body: JSON.stringify(data),
       ...config,
     });
@@ -40,12 +54,19 @@ const apiClient = {
   },
 
   put: async (url, data, config = {}) => {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...config.headers,
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`/api${url}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...config.headers,
-      },
+      headers,
       body: JSON.stringify(data),
       ...config,
     });
@@ -58,12 +79,19 @@ const apiClient = {
   },
 
   delete: async (url, config = {}) => {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...config.headers,
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`/api${url}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...config.headers,
-      },
+      headers,
       ...config,
     });
     

@@ -5,25 +5,15 @@
  * @param {string} locale - Locale (varsayılan: 'tr-TR')
  * @returns {string} Formatlanmış para birimi
  */
-export const formatCurrency = (amount, currency = 'TRY', locale = 'tr-TR') => {
-  if (amount === null || amount === undefined || isNaN(amount)) {
-    return '₺0,00';
-  }
-
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
-  } catch (error) {
-    // Fallback format
-    return `₺${Number(amount).toLocaleString('tr-TR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
-  }
+export const formatCurrency = (amount) => {
+  if (amount === null || amount === undefined) return '-';
+  
+  return new Intl.NumberFormat('tr-TR', {
+    style: 'currency',
+    currency: 'TRY',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
 };
 
 /**

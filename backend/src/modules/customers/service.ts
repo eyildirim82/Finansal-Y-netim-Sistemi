@@ -7,13 +7,17 @@ export class CustomerService extends BaseService {
   /**
    * Tüm müşterileri getir (sayfalama ile)
    */
-  async getCustomers(params: PaginationParams): Promise<ApiResponse<PaginatedResponse<Customer>>> {
+  async getCustomers(params: PaginationParams, userId?: string): Promise<ApiResponse<PaginatedResponse<Customer>>> {
     return this.safeDatabaseOperation(async () => {
       const { page, limit, sortBy, sortOrder } = this.validatePaginationParams(params);
       const skip = (page - 1) * limit;
 
+      // Kullanıcıya özel filtreleme
+      const whereClause = userId ? { userId } : {};
+
       const [customers, total] = await Promise.all([
         this.prisma.customer.findMany({
+          where: whereClause,
           skip,
           take: limit,
           orderBy: { [sortBy]: sortOrder },
@@ -35,7 +39,7 @@ export class CustomerService extends BaseService {
             }
           }
         }),
-        this.prisma.customer.count()
+        this.prisma.customer.count({ where: whereClause })
       ]);
 
       return this.createPaginatedResponse(customers, total, page, limit);

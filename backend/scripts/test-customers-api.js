@@ -8,7 +8,7 @@ async function testCustomersAPI() {
     
     // Test kullanıcısını bul
     const user = await prisma.user.findFirst({
-      where: { username: 'testuser' }
+      where: { username: 'admin' }
     });
     
     if (!user) {

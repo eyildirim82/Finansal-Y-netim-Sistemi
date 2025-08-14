@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PlusIcon, SearchIcon } from 'lucide-react';
+import { PlusIcon, SearchIcon, FilterIcon } from 'lucide-react';
 import { usePaginatedQuery, useApiDelete } from '../shared/hooks/useApi';
 import DataTable from '../shared/components/DataTable';
 import Modal from '../components/Modal';
@@ -16,8 +16,11 @@ const Customers = () => {
     accountType: '',
     tag1: '',
     tag2: '',
-    isActive: ''
+    isActive: '',
+    type: '',
+    hasDebt: ''
   });
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
 
   // Müşteri listesi
   const {
@@ -206,7 +209,7 @@ const Customers = () => {
           </p>
         </div>
         
-        <div className="mt-4 sm:mt-0 flex space-x-3">
+        <div className="mt-4 sm:mt-0 flex space-x-3 items-center">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -217,7 +220,57 @@ const Customers = () => {
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          
+
+          <div className="relative">
+            <button
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-gray-700 hover:bg-gray-50"
+            >
+              <FilterIcon className="w-4 h-4" />
+            </button>
+
+            {showFilterPanel && (
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-lg p-4 z-10">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Müşteri Türü</label>
+                  <select
+                    value={filters.type}
+                    onChange={(e) => handleFilterChange('type', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300"
+                  >
+                    <option value="">Tümü</option>
+                    <option value="INDIVIDUAL">Bireysel</option>
+                    <option value="COMPANY">Kurumsal</option>
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Aktiflik</label>
+                  <select
+                    value={filters.isActive}
+                    onChange={(e) => handleFilterChange('isActive', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300"
+                  >
+                    <option value="">Tümü</option>
+                    <option value="true">Aktif</option>
+                    <option value="false">Pasif</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Borç Durumu</label>
+                  <select
+                    value={filters.hasDebt}
+                    onChange={(e) => handleFilterChange('hasDebt', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300"
+                  >
+                    <option value="">Tümü</option>
+                    <option value="true">Borçlu</option>
+                    <option value="false">Borcu Yok</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={handleAddNew}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

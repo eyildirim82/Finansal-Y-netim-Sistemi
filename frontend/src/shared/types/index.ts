@@ -112,6 +112,9 @@ export interface TableColumn<T> {
   sortable?: boolean;
   render?: (value: any, record: T) => React.ReactNode;
   width?: string;
+  filterable?: boolean;
+  filterType?: 'text' | 'select';
+  filterOptions?: { value: string; label: string }[];
 }
 
 // Filtre tipleri

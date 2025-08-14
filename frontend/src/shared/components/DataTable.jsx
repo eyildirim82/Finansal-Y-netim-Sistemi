@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon } from 'lucide-react';
 
 const DataTable = ({
@@ -7,6 +7,8 @@ const DataTable = ({
   pagination = null,
   onPageChange,
   onSortChange,
+  filters = {},
+  onFilterChange,
   loading = false,
   emptyMessage = 'Veri bulunamadı',
   className = ''
@@ -31,6 +33,10 @@ const DataTable = ({
     return sortConfig.direction === 'asc' 
       ? <ChevronUpIcon className="w-4 h-4 text-blue-600" />
       : <ChevronDownIcon className="w-4 h-4 text-blue-600" />;
+  };
+
+  const handleFilter = (key, value) => {
+    onFilterChange?.(key, value);
   };
 
   // Sayfalama kontrolleri
@@ -126,6 +132,37 @@ const DataTable = ({
                 </th>
               ))}
             </tr>
+            {columns.some(col => col.filterable) && (
+              <tr>
+                {columns.map((column) => (
+                  <th key={column.key} className="px-4 py-2">
+                    {column.filterable ? (
+                      column.filterType === 'select' ? (
+                        <select
+                          value={filters[column.key] || ''}
+                          onChange={(e) => handleFilter(column.key, e.target.value)}
+                          className="border-gray-300 rounded-md text-sm"
+                        >
+                          <option value="">Hepsi</option>
+                          {column.filterOptions?.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={filters[column.key] || ''}
+                          onChange={(e) => handleFilter(column.key, e.target.value)}
+                          className="border-gray-300 rounded-md text-sm w-full"
+                        />
+                      )
+                    ) : null}
+                  </th>
+                ))}
+              </tr>
+            )}
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {data.length === 0 ? (

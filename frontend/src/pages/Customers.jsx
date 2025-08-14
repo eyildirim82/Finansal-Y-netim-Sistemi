@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PlusIcon, SearchIcon, FilterIcon } from 'lucide-react';
+import { PlusIcon, SearchIcon } from 'lucide-react';
 import { usePaginatedQuery, useApiDelete } from '../shared/hooks/useApi';
 import DataTable from '../shared/components/DataTable';
 import Modal from '../components/Modal';
@@ -11,6 +11,13 @@ const Customers = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    address: '',
+    accountType: '',
+    tag1: '',
+    tag2: '',
+    isActive: ''
+  });
 
   // Müşteri listesi
   const {
@@ -22,7 +29,7 @@ const Customers = () => {
   } = usePaginatedQuery(
     ['customers'],
     '/customers',
-    { search: searchTerm },
+    { search: searchTerm, ...filters },
     {
       enabled: true,
     }
@@ -59,6 +66,50 @@ const Customers = () => {
       key: 'type',
       label: 'Tür',
       render: (value) => value === 'INDIVIDUAL' ? 'Bireysel' : 'Kurumsal',
+    },
+    {
+      key: 'address',
+      label: 'Adres',
+      sortable: true,
+      render: (value) => value || '-',
+      filterable: true,
+      filterType: 'text',
+    },
+    {
+      key: 'accountType',
+      label: 'Hesap Tipi',
+      sortable: true,
+      render: (value) => value || '-',
+      filterable: true,
+      filterType: 'text',
+    },
+    {
+      key: 'tag1',
+      label: 'Etiket 1',
+      sortable: true,
+      render: (value) => value || '-',
+      filterable: true,
+      filterType: 'text',
+    },
+    {
+      key: 'tag2',
+      label: 'Etiket 2',
+      sortable: true,
+      render: (value) => value || '-',
+      filterable: true,
+      filterType: 'text',
+    },
+    {
+      key: 'isActive',
+      label: 'Aktif',
+      sortable: true,
+      render: (value) => (value ? 'Evet' : 'Hayır'),
+      filterable: true,
+      filterType: 'select',
+      filterOptions: [
+        { value: 'true', label: 'Evet' },
+        { value: 'false', label: 'Hayır' },
+      ],
     },
     {
       key: 'balance',
@@ -111,6 +162,10 @@ const Customers = () => {
     if (window.confirm('Bu müşteriyi silmek istediğinizden emin misiniz?')) {
       deleteMutation.mutate(`/customers/${customerId}`);
     }
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
   // Modal kapatma
@@ -211,6 +266,8 @@ const Customers = () => {
         pagination={customersData?.data?.pagination}
         onPageChange={handlePageChange}
         onSortChange={handleSortChange}
+        filters={filters}
+        onFilterChange={handleFilterChange}
         loading={isLoading}
         emptyMessage="Müşteri bulunamadı"
       />

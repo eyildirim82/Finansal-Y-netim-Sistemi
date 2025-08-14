@@ -14,12 +14,17 @@ export class CustomerController {
    */
   getCustomers = async (req: Request, res: Response) => {
     try {
-      const { page, limit, sortBy, sortOrder } = req.query;
+      const { page, limit, sortBy, sortOrder, address, accountType, tag1, tag2, isActive } = req.query;
       const params = {
         page: page ? parseInt(page as string) : 1,
         limit: limit ? parseInt(limit as string) : 10,
         sortBy: sortBy as string,
-        sortOrder: sortOrder as 'asc' | 'desc'
+        sortOrder: sortOrder as 'asc' | 'desc',
+        address: (address as string) || undefined,
+        accountType: (accountType as string) || undefined,
+        tag1: (tag1 as string) || undefined,
+        tag2: (tag2 as string) || undefined,
+        isActive: typeof isActive === 'string' && isActive !== '' ? isActive === 'true' : undefined
       };
 
       // Kullanıcı ID'sini request'ten al

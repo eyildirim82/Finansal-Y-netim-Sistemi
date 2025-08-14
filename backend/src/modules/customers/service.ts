@@ -14,12 +14,14 @@ export class CustomerService extends BaseService {
       tag1?: string;
       tag2?: string;
       isActive?: boolean;
+      type?: string;
+      hasDebt?: boolean;
     },
     userId?: string
   ): Promise<ApiResponse<PaginatedResponse<Customer>>> {
     return this.safeDatabaseOperation(async () => {
       const { page, limit, sortBy, sortOrder } = this.validatePaginationParams(params);
-      const { address, accountType, tag1, tag2, isActive } = params;
+      const { address, accountType, tag1, tag2, isActive, type, hasDebt } = params;
       const skip = (page - 1) * limit;
 
       // Kullanıcıya ve filtrelere özel sorgu
@@ -29,6 +31,12 @@ export class CustomerService extends BaseService {
       if (tag1) whereClause.tag1 = { contains: tag1 };
       if (tag2) whereClause.tag2 = { contains: tag2 };
       if (typeof isActive === 'boolean') whereClause.isActive = isActive;
+      if (type) whereClause.type = type;
+      if (typeof hasDebt === 'boolean') {
+        whereClause.balance = {
+          is: { netBalance: hasDebt ? { lt: 0 } : { gte: 0 } }
+        };
+      }
 
       const [customers, total] = await Promise.all([
         this.prisma.customer.findMany({

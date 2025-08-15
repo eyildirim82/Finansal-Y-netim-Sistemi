@@ -386,7 +386,7 @@ class ReportController {
     }
     static async getCustomerReport(req, res) {
         try {
-            const { startDate, endDate, type, limit = 10 } = req.query;
+            const { startDate, endDate, type, limit = 25 } = req.query;
             const userId = req.user.id;
             const limitNum = Number(limit);
             if (!Number.isInteger(limitNum) || limitNum <= 0) {

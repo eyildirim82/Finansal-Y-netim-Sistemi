@@ -717,6 +717,10 @@ class ExtractController {
             console.log('[DEBUG] FAKTORİNG müşterisi atlandı:', header.name);
             return null;
         }
+        if (header.code && header.code.toUpperCase().startsWith('MH')) {
+            console.log('[DEBUG] MH ile başlayan müşteri kodu atlandı:', header.code);
+            return null;
+        }
         let customer = await prisma.customer.findFirst({
             where: { name: header.name, userId }
         });

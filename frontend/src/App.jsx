@@ -22,7 +22,7 @@ import CustomerPaymentPerformance from './pages/reports/CustomerPaymentPerforman
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
   
-  console.log('ProtectedRoute - user:', user, 'loading:', loading)
+
   
   if (loading) {
     return (
@@ -33,11 +33,8 @@ const ProtectedRoute = ({ children }) => {
   }
   
   if (!user) {
-    console.log('Kullanıcı yok, login sayfasına yönlendiriliyor')
     return <Navigate to="/login" replace />
   }
-  
-  console.log('Kullanıcı var, içerik gösteriliyor')
   return children
 }
 

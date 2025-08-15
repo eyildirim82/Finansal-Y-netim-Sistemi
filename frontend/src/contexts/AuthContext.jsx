@@ -121,7 +121,7 @@ export const AuthProvider = ({ children }) => {
 
   // İlk yükleme - otomatik kullanıcı yükleme
   useEffect(() => {
-    loadUser() // Otomatik kullanıcı yükleme aktif
+    loadUser(); // Otomatik kullanıcı yükleme aktif
   }, [])
 
   const value = {
@@ -133,6 +133,8 @@ export const AuthProvider = ({ children }) => {
     changePassword,
     isAuthenticated: !!user
   }
+
+
 
   return (
     <AuthContext.Provider value={value}>

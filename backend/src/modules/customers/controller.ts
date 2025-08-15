@@ -17,7 +17,7 @@ export class CustomerController {
       const { page, limit, sortBy, sortOrder, address, accountType, tag1, tag2, isActive, type, hasDebt } = req.query;
       const params = {
         page: page ? parseInt(page as string) : 1,
-        limit: limit ? parseInt(limit as string) : 10,
+        limit: limit ? parseInt(limit as string) : 25,
         sortBy: sortBy as string,
         sortOrder: sortOrder as 'asc' | 'desc',
         address: (address as string) || undefined,
@@ -195,6 +195,83 @@ export class CustomerController {
       return res.status(500).json({
         success: false,
         message: 'Vadesi geçmiş müşteriler getirilirken hata oluştu',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Müşteri istatistiklerini getir
+   */
+  getCustomerStats = async (req: Request, res: Response) => {
+    try {
+      console.log('📊 getCustomerStats - Request başladı');
+      console.log('📊 getCustomerStats - User:', req.user);
+      
+      const { address, accountType, tag1, tag2, isActive, type, hasDebt } = req.query;
+      const filters = {
+        address: (address as string) || undefined,
+        accountType: (accountType as string) || undefined,
+        tag1: (tag1 as string) || undefined,
+        tag2: (tag2 as string) || undefined,
+        isActive: typeof isActive === 'string' && isActive !== '' ? isActive === 'true' : undefined,
+        type: (type as string) || undefined,
+        hasDebt: typeof hasDebt === 'string' && hasDebt !== '' ? hasDebt === 'true' : undefined
+      };
+
+      console.log('📊 getCustomerStats - Filters:', filters);
+
+      // Kullanıcı ID'sini request'ten al
+      const userId = req.user?.id;
+      console.log('📊 getCustomerStats - UserId:', userId);
+
+      const result = await this.customerService.getCustomerStats(filters, userId);
+      console.log('📊 getCustomerStats - Service result:', result);
+      
+      if (result.success) {
+        console.log('📊 getCustomerStats - Başarılı response gönderiliyor');
+        return res.json(result);
+      } else {
+        console.log('📊 getCustomerStats - Hata response gönderiliyor');
+        return res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('❌ getCustomerStats - Hata:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Müşteri istatistikleri getirilirken hata oluştu',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Tüm müşterileri sil
+   */
+  deleteAllCustomers = async (req: Request, res: Response) => {
+    try {
+      console.log('🗑️ deleteAllCustomers - Request başladı');
+      console.log('🗑️ deleteAllCustomers - User:', req.user);
+      
+      // Kullanıcı ID'sini request'ten al
+      const userId = req.user?.id;
+      console.log('🗑️ deleteAllCustomers - UserId:', userId);
+
+      const result = await this.customerService.deleteAllCustomers(userId);
+      console.log('🗑️ deleteAllCustomers - Service result:', result);
+      
+      if (result.success) {
+        console.log('🗑️ deleteAllCustomers - Başarılı response gönderiliyor');
+        return res.json(result);
+      } else {
+        console.log('🗑️ deleteAllCustomers - Hata response gönderiliyor');
+        return res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('❌ deleteAllCustomers - Hata:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Tüm müşteriler silinirken hata oluştu',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

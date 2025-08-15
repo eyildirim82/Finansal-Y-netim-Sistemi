@@ -10,10 +10,12 @@ router.use(authMiddleware);
 
 // Müşteri CRUD işlemleri
 router.get('/', customerController.getCustomers);
+router.get('/stats', customerController.getCustomerStats);
 router.get('/search', customerController.searchCustomers);
 router.get('/overdue', customerController.getOverdueCustomers);
-router.get('/:id', customerController.getCustomerById);
 router.post('/', customerController.createCustomer);
+router.delete('/all', customerController.deleteAllCustomers); // Daha spesifik path
+router.get('/:id', customerController.getCustomerById);
 router.put('/:id', customerController.updateCustomer);
 router.delete('/:id', customerController.deleteCustomer);
 

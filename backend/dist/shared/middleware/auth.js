@@ -10,15 +10,20 @@ const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const authMiddleware = async (req, res, next) => {
     try {
+        console.log('🔐 Auth middleware - URL:', req.url);
+        console.log('🔐 Auth middleware - Headers:', req.headers);
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.log('❌ Auth middleware - Token bulunamadı');
             return res.status(401).json({
                 success: false,
                 error: 'Yetkilendirme token\'ı gerekli'
             });
         }
         const token = authHeader.substring(7);
+        console.log('🔐 Auth middleware - Token alındı:', token.substring(0, 20) + '...');
         const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        console.log('🔐 Auth middleware - Token doğrulandı, userId:', decoded.userId);
         const user = await prisma.user.findUnique({
             where: { id: decoded.userId },
             select: {
@@ -29,16 +34,20 @@ const authMiddleware = async (req, res, next) => {
                 isActive: true
             }
         });
+        console.log('🔐 Auth middleware - Kullanıcı bulundu:', user ? 'Evet' : 'Hayır');
         if (!user || !user.isActive) {
+            console.log('❌ Auth middleware - Kullanıcı bulunamadı veya pasif');
             return res.status(401).json({
                 success: false,
                 error: 'Geçersiz veya pasif kullanıcı'
             });
         }
         req.user = user;
+        console.log('✅ Auth middleware - Kullanıcı doğrulandı:', user.username);
         return next();
     }
     catch (error) {
+        console.error('❌ Auth middleware error:', error);
         (0, logger_1.logError)('Auth middleware error:', error);
         if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
             return res.status(401).json({

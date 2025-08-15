@@ -785,6 +785,12 @@ export class ExtractController {
       return null;
     }
     
+    // MH ile başlayan müşteri kodlarını filtrele
+    if (header.code && header.code.toUpperCase().startsWith('MH')) {
+      console.log('[DEBUG] MH ile başlayan müşteri kodu atlandı:', header.code);
+      return null;
+    }
+    
     // Önce isimle ara
     let customer = await prisma.customer.findFirst({
       where: { name: header.name, userId }

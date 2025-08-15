@@ -2,18 +2,28 @@ import React, { useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon } from 'lucide-react';
 
 const DataTable = ({
-  data = [],
+  data,
   columns = [],
   pagination = null,
   onPageChange,
   onSortChange,
+  onLimitChange,
   filters = {},
   onFilterChange,
   loading = false,
   emptyMessage = 'Veri bulunamadı',
   className = ''
 }) => {
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  // data prop'unu güvenli hale getir
+  const safeData = data && Array.isArray(data) ? data : [];
+  
+  // Sıralama durumunu pagination'dan al
+  const currentSortBy = pagination?.sortBy || 'createdAt';
+  const currentSortOrder = pagination?.sortOrder || 'desc';
+  const [sortConfig, setSortConfig] = useState({ 
+    key: currentSortBy, 
+    direction: currentSortOrder 
+  });
 
   // Sıralama işlemi
   const handleSort = (key) => {
@@ -24,6 +34,16 @@ const DataTable = ({
     setSortConfig({ key, direction });
     onSortChange?.(key, direction);
   };
+
+  // Pagination'dan gelen sıralama değişikliklerini takip et
+  React.useEffect(() => {
+    if (pagination?.sortBy && pagination?.sortOrder) {
+      setSortConfig({ 
+        key: pagination.sortBy, 
+        direction: pagination.sortOrder 
+      });
+    }
+  }, [pagination?.sortBy, pagination?.sortOrder]);
 
   // Sıralama ikonu
   const getSortIcon = (key) => {
@@ -43,16 +63,31 @@ const DataTable = ({
   const renderPagination = () => {
     if (!pagination) return null;
 
-    const { page, totalPages, total } = pagination;
-    const startItem = (page - 1) * pagination.limit + 1;
-    const endItem = Math.min(page * pagination.limit, total);
+    const { page, totalPages, total, limit } = pagination;
+    const startItem = (page - 1) * limit + 1;
+    const endItem = Math.min(page * limit, total);
 
     return (
       <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
-        <div className="flex items-center text-sm text-gray-700">
+        <div className="flex items-center space-x-4 text-sm text-gray-700">
           <span>
             {startItem}-{endItem} / {total} kayıt
           </span>
+          
+          {/* Sayfa boyutu seçici */}
+          <div className="flex items-center space-x-2">
+            <span>Sayfa başına:</span>
+            <select
+              value={limit}
+              onChange={(e) => onLimitChange?.(parseInt(e.target.value))}
+              className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
         </div>
         
         <div className="flex items-center space-x-2">
@@ -165,14 +200,14 @@ const DataTable = ({
             )}
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.length === 0 ? (
+            {safeData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-500">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              data.map((row, index) => (
+              safeData.map((row, index) => (
                 <tr key={row.id || index} className="hover:bg-gray-50">
                   {columns.map((column) => (
                     <td key={column.key} className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">

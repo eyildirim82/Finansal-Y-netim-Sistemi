@@ -2,10 +2,12 @@ import { Request, Response } from 'express';
 export declare class BankingController {
     private emailService;
     private matchingService;
+    private pdfParserService;
     constructor();
     fetchEmails(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     processEmail(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     getBankTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    getPDFTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     getUnmatchedPayments(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     matchPayment(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     getEmailSettings(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
@@ -18,5 +20,12 @@ export declare class BankingController {
     startRealtimeMonitoring(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     stopRealtimeMonitoring(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     updateEmailSettings(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    detectMissingTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    parsePDFTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    savePDFTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    deleteTransaction(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    deleteTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    cleanupOldTransactions(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    processPDFWithETL(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
 }
 //# sourceMappingURL=controller.d.ts.map

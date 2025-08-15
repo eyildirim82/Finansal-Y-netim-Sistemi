@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PlusIcon, SearchIcon, FilterIcon } from 'lucide-react';
-import { usePaginatedQuery, useApiDelete } from '../shared/hooks/useApi';
+import { usePaginatedQuery, useApiDelete, useApiQuery } from '../shared/hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
 import DataTable from '../shared/components/DataTable';
 import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
 import { formatCurrency } from '../utils/formatCurrency';
 
 const Customers = () => {
+  const navigate = useNavigate();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,13 +25,38 @@ const Customers = () => {
   });
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
+  // Authentication kontrolü
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  // Eğer authentication yükleniyorsa veya kullanıcı giriş yapmamışsa loading göster
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <span className="ml-4 text-lg">Yükleniyor...</span>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // navigate zaten çalışacak
+  }
+
+
+
   // Müşteri listesi
   const {
     data: customersData,
     isLoading,
+    error: customersError,
     pagination,
     handlePageChange,
     handleSortChange,
+    handleLimitChange,
   } = usePaginatedQuery(
     ['customers'],
     '/customers',
@@ -38,12 +66,65 @@ const Customers = () => {
     }
   );
 
+
+
+  // Müşteri istatistikleri - tüm müşterileri dahil eder
+  const queryString = new URLSearchParams(filters).toString();
+  const { data: statsData, error: statsError } = useApiQuery(
+    ['customer-stats', filters],
+    `/customers/stats?${queryString}`,
+    {
+      enabled: true,
+    }
+  );
+
+
+
   // Müşteri silme
-  const deleteMutation = useApiDelete('', {
-    invalidateQueries: ['customers'],
+  const deleteMutation = useApiDelete('/customers', {
+    invalidateQueries: ['customers', 'customer-stats'],
     successMessage: 'Müşteri başarıyla silindi',
     errorMessage: 'Müşteri silinirken hata oluştu',
   });
+
+  // Tüm müşterileri silme
+  const deleteAllMutation = useApiDelete('/customers/all', {
+    invalidateQueries: ['customers', 'customer-stats'],
+    successMessage: 'Tüm müşteriler başarıyla silindi',
+    errorMessage: 'Tüm müşteriler silinirken hata oluştu',
+  });
+
+  // Bulk delete için (gelecekte kullanılabilir)
+  const bulkDeleteMutation = useApiDelete('/customers/bulk', {
+    invalidateQueries: ['customers', 'customer-stats'],
+    successMessage: 'Seçili müşteriler başarıyla silindi',
+    errorMessage: 'Seçili müşteriler silinirken hata oluştu',
+  });
+
+  // Tüm müşterileri silme işlemi
+  const handleDeleteAll = () => {
+    const customerCount = stats.total || 0;
+    
+    // Eğer müşteri sayısı 0 ise uyarı ver ama işlemi engelleme
+    if (customerCount === 0) {
+      const confirmEmpty = window.confirm('Müşteri sayısı 0 görünüyor. Yine de tüm müşterileri silme işlemini başlatmak istiyor musunuz?');
+      if (!confirmEmpty) {
+        return;
+      }
+    }
+
+    const confirmMessage = `DİKKAT! Bu işlem geri alınamaz!\n\n${customerCount} müşteriyi silmek istediğinizden emin misiniz?\n\nBu işlem şunları silecek:\n- Tüm müşteri kayıtları\n- Müşteri bakiyeleri\n- İlişkili tüm veriler\n\nDevam etmek için "TÜMÜNÜ SİL" yazın:`;
+    
+    const userInput = prompt(confirmMessage);
+    
+    if (userInput === 'TÜMÜNÜ SİL') {
+      // Tüm müşterileri silmek için gövdesiz DELETE isteği
+      // Backend hiç parametre almıyor, sadece kullanıcı ID'sini kullanıyor
+      deleteAllMutation.mutate();
+    } else {
+      alert('İşlem iptal edildi.');
+    }
+  };
 
   // Tablo sütunları
   const columns = [
@@ -63,11 +144,13 @@ const Customers = () => {
     {
       key: 'phone',
       label: 'Telefon',
+      sortable: true,
       render: (value) => value || '-',
     },
     {
       key: 'type',
       label: 'Tür',
+      sortable: true,
       render: (value) => value === 'INDIVIDUAL' ? 'Bireysel' : 'Kurumsal',
     },
     {
@@ -117,7 +200,7 @@ const Customers = () => {
     {
       key: 'balance',
       label: 'Bakiye',
-      sortable: true,
+      sortable: true, // Backend'de balance.netBalance'a göre sıralama eklendi
       render: (value) => {
         if (!value) return '-';
         return (
@@ -130,6 +213,7 @@ const Customers = () => {
     {
       key: 'dueDays',
       label: 'Vade Günü',
+      sortable: true,
       render: (value) => value ? `${value} gün` : '-',
     },
     {
@@ -163,7 +247,7 @@ const Customers = () => {
   // Müşteri silme
   const handleDelete = (customerId) => {
     if (window.confirm('Bu müşteriyi silmek istediğinizden emin misiniz?')) {
-      deleteMutation.mutate(`/customers/${customerId}`);
+      deleteMutation.mutate({ id: customerId });
     }
   };
 
@@ -183,23 +267,15 @@ const Customers = () => {
     setShowModal(true);
   };
 
-  // İstatistik hesaplamaları
-  const calculateStats = () => {
-    if (!customersData?.data?.data) return { total: 0, active: 0, debt: 0, avgBalance: 0 };
-    
-    const customers = customersData.data.data;
-    const total = customers.length;
-    const active = customers.filter(c => c.isActive).length;
-    const debt = customers.filter(c => c.balance && c.balance.netBalance < 0).length;
-    const avgBalance = customers.reduce((sum, c) => sum + (c.balance?.netBalance || 0), 0) / total;
-    
-    return { total, active, debt, avgBalance };
-  };
+  // İstatistik hesaplamaları - tüm müşterileri dahil eder
+  const stats = statsData?.data?.data || { total: 0, active: 0, debt: 0, avgBalance: 0 };
 
-  const stats = calculateStats();
+
 
   return (
     <div className="space-y-6">
+
+
       {/* Başlık ve Arama */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -278,6 +354,24 @@ const Customers = () => {
             <PlusIcon className="w-4 h-4 mr-2" />
             Yeni Müşteri
           </button>
+          
+          <button
+            onClick={handleDeleteAll}
+            disabled={deleteAllMutation.isLoading}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={`Müşteri sayısı: ${stats.total}, Loading: ${deleteAllMutation.isLoading}`}
+          >
+            {deleteAllMutation.isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Siliniyor...
+              </>
+            ) : (
+              <>
+                🗑️ Tümünü Sil ({stats.total})
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -312,18 +406,25 @@ const Customers = () => {
         </div>
       </div>
 
-      {/* Müşteri Tablosu */}
-      <DataTable
-        data={customersData?.data?.data || []}
-        columns={columns}
-        pagination={customersData?.data?.pagination}
-        onPageChange={handlePageChange}
-        onSortChange={handleSortChange}
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        loading={isLoading}
-        emptyMessage="Müşteri bulunamadı"
-      />
+      
+
+             {/* Müşteri Tablosu */}
+       <DataTable
+         data={Array.isArray(customersData?.data?.data?.data) ? customersData.data.data.data : []}
+         columns={columns}
+         pagination={{
+           ...customersData?.data?.data?.pagination,
+           sortBy: pagination?.sortBy || 'createdAt',
+           sortOrder: pagination?.sortOrder || 'desc'
+         }}
+         onPageChange={handlePageChange}
+         onSortChange={handleSortChange}
+         onLimitChange={handleLimitChange}
+         filters={filters}
+         onFilterChange={handleFilterChange}
+         loading={isLoading}
+         emptyMessage="Müşteri bulunamadı"
+       />
 
       {/* Müşteri Ekleme/Düzenleme Modal */}
       <Modal

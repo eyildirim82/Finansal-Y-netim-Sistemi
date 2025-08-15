@@ -1,10 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import toast from 'react-hot-toast';
+import apiClient from '../../services/apiClient';
 
-// API istemcisi
-const apiClient = {
+// API istemcisi (eski implementasyon - sadece geriye uyumluluk için)
+const legacyApiClient = {
   get: async (url, config = {}) => {
+    // URL'nin / ile başladığından emin ol
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
     const token = localStorage.getItem('token');
     const headers = {
       'Content-Type': 'application/json',
@@ -15,20 +18,23 @@ const apiClient = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(`/api${url}`, {
+    const response = await fetch(`/api${normalizedUrl}`, {
       method: 'GET',
       headers,
       ...config,
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${response.status} - ${text}`);
     }
     
     return response.json();
   },
 
   post: async (url, data, config = {}) => {
+    // URL'nin / ile başladığından emin ol
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
     const token = localStorage.getItem('token');
     const headers = {
       'Content-Type': 'application/json',
@@ -39,7 +45,7 @@ const apiClient = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(`/api${url}`, {
+    const response = await fetch(`/api${normalizedUrl}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
@@ -47,13 +53,16 @@ const apiClient = {
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${response.status} - ${text}`);
     }
     
     return response.json();
   },
 
   put: async (url, data, config = {}) => {
+    // URL'nin / ile başladığından emin ol
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
     const token = localStorage.getItem('token');
     const headers = {
       'Content-Type': 'application/json',
@@ -64,7 +73,7 @@ const apiClient = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(`/api${url}`, {
+    const response = await fetch(`/api${normalizedUrl}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify(data),
@@ -72,13 +81,16 @@ const apiClient = {
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${response.status} - ${text}`);
     }
     
     return response.json();
   },
 
-  delete: async (url, config = {}) => {
+  delete: async (url, data = undefined, config = {}) => {
+    // URL'nin / ile başladığından emin ol
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
     const token = localStorage.getItem('token');
     const headers = {
       'Content-Type': 'application/json',
@@ -89,14 +101,28 @@ const apiClient = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(`/api${url}`, {
+    // Debug: URL ve Authorization header'ını logla (sadece development'ta)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 DELETE Request Debug:');
+      console.log('  - Original URL:', url);
+      console.log('  - Normalized URL:', normalizedUrl);
+      console.log('  - Final URL:', `/api${normalizedUrl}`);
+      console.log('  - Token exists:', !!token);
+      console.log('  - Authorization header:', headers['Authorization'] ? 'Bearer ***' : 'None');
+      console.log('  - Data:', data);
+    }
+    
+    const response = await fetch(`/api${normalizedUrl}`, {
       method: 'DELETE',
       headers,
+      // bazı sunucular DELETE body kabul eder, bazıları etmez.
+      ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
       ...config,
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${response.status} - ${text}`);
     }
     
     return response.json();
@@ -107,7 +133,14 @@ const apiClient = {
 export const useApiQuery = (key, url, options = {}) => {
   return useQuery(
     key,
-    () => apiClient.get(url),
+    async () => {
+      try {
+        const result = await apiClient.get(url);
+        return result;
+      } catch (error) {
+        throw error;
+      }
+    },
     {
       retry: 3,
       refetchOnWindowFocus: false,
@@ -139,6 +172,7 @@ export const useApiMutation = (url, options = {}) => {
         }
       },
       onError: (error, variables, context) => {
+        console.error('useApiMutation Error:', error);
         if (options.onError) {
           options.onError(error, variables, context);
         }
@@ -174,6 +208,7 @@ export const useApiUpdate = (url, options = {}) => {
         }
       },
       onError: (error, variables, context) => {
+        console.error('useApiUpdate Error:', error);
         if (options.onError) {
           options.onError(error, variables, context);
         }
@@ -192,7 +227,60 @@ export const useApiDelete = (url, options = {}) => {
   const queryClient = useQueryClient();
   
   return useMutation(
-    () => apiClient.delete(url),
+    // variables -> { id } veya { ids: [...] } gibi gelecek
+    (variables) => {
+      // Debug logları (sadece development'ta)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 useApiDelete Debug:');
+        console.log('  - Base URL:', url);
+        console.log('  - Variables:', variables);
+      }
+      
+      // Senaryoya göre pattern'leri seç:
+      // 1) /customers/:id
+      if (variables?.id && typeof variables.id === 'string') {
+        const finalUrl = `${url}/${variables.id}`;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('  - Pattern 1: ID-based delete');
+          console.log('  - Final URL:', finalUrl);
+        }
+        return legacyApiClient.delete(finalUrl);
+      }
+      // 2) /customers/bulk + body (JSON body)
+      if (variables?.body) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('  - Pattern 2: Body-based delete');
+          console.log('  - Final URL:', url);
+          console.log('  - Body:', variables.body);
+        }
+        return legacyApiClient.delete(url, variables.body);
+      }
+      // 3) Bulk delete için ids array'i body'de gönder (en yaygın kullanım)
+      if (Array.isArray(variables?.ids) && variables.ids.length) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('  - Pattern 3: Bulk delete with body');
+          console.log('  - Final URL:', url);
+          console.log('  - Body:', { ids: variables.ids });
+        }
+        return legacyApiClient.delete(url, { ids: variables.ids });
+      }
+      // 4) /customers?ids=a,b,c (querystring - alternatif)
+      if (variables?.queryString && Array.isArray(variables?.ids) && variables.ids.length) {
+        const qs = new URLSearchParams({ ids: variables.ids.join(',') }).toString();
+        const finalUrl = `${url}?${qs}`;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('  - Pattern 4: Query string delete');
+          console.log('  - Final URL:', finalUrl);
+        }
+        return legacyApiClient.delete(finalUrl);
+      }
+      // fallback: gövdesiz
+      if (process.env.NODE_ENV === 'development') {
+        console.log('  - Pattern 5: Fallback (no variables)');
+        console.log('  - Final URL:', url);
+      }
+      return legacyApiClient.delete(url);
+    },
     {
       onSuccess: (data, variables, context) => {
         if (options.onSuccess) {
@@ -208,6 +296,7 @@ export const useApiDelete = (url, options = {}) => {
         }
       },
       onError: (error, variables, context) => {
+        console.error('useApiDelete Error:', error);
         if (options.onError) {
           options.onError(error, variables, context);
         }
@@ -225,7 +314,7 @@ export const useApiDelete = (url, options = {}) => {
 export const usePaginatedQuery = (key, url, params = {}, options = {}) => {
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 10,
+    limit: 25,
     sortBy: 'createdAt',
     sortOrder: 'desc',
   });
@@ -249,6 +338,7 @@ export const usePaginatedQuery = (key, url, params = {}, options = {}) => {
   }, []);
 
   const handleSortChange = useCallback((sortBy, sortOrder) => {
+    console.log('🔍 Sıralama değişti:', { sortBy, sortOrder });
     setPagination(prev => ({ ...prev, sortBy, sortOrder, page: 1 }));
   }, []);
 
@@ -265,4 +355,4 @@ export const usePaginatedQuery = (key, url, params = {}, options = {}) => {
   };
 };
 
-export default apiClient;
+export default legacyApiClient;

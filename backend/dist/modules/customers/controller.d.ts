@@ -1,15 +1,15 @@
 import { Request, Response } from 'express';
-export type CustomerSortField = 'name' | 'phone' | 'address' | 'type' | 'createdAt' | 'balance';
 export declare class CustomerController {
-    static getAllCustomers(req: Request, res: Response): Promise<Response>;
-    static getCustomer(req: Request, res: Response): Promise<Response>;
-    static createCustomer(req: Request, res: Response): Promise<Response>;
-    static updateCustomer(req: Request, res: Response): Promise<Response>;
-    static updateCustomerDueDays(req: Request, res: Response): Promise<Response>;
-    static deleteCustomer(req: Request, res: Response): Promise<Response>;
-    static getCustomerStats(req: Request, res: Response): Promise<Response>;
-    static searchCustomers(req: Request, res: Response): Promise<Response>;
-    static deleteMultipleCustomers(req: Request, res: Response): Promise<Response>;
-    static deleteOldCustomers(req: Request, res: Response): Promise<Response>;
+    private customerService;
+    constructor();
+    getCustomers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+    getCustomerById: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+    createCustomer: ((req: Request, res: Response, next: import("express").NextFunction) => Promise<void | Response<any, Record<string, any>>>)[];
+    updateCustomer: ((req: Request, res: Response, next: import("express").NextFunction) => Promise<void | Response<any, Record<string, any>>>)[];
+    deleteCustomer: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+    searchCustomers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+    getOverdueCustomers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+    getCustomerStats: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+    deleteAllCustomers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 }
 //# sourceMappingURL=controller.d.ts.map

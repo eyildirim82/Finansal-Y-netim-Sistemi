@@ -38,23 +38,44 @@ export class CustomerService extends BaseService {
         };
       }
 
+      // Bakiye sıralaması için özel mantık
+      let orderByClause;
+      if (sortBy === 'balance') {
+        // Bakiye sıralaması için balance tablosunu join et
+        orderByClause = {
+          balance: {
+            netBalance: sortOrder
+          }
+        };
+      } else {
+        orderByClause = { [sortBy]: sortOrder };
+      }
+
       const [customers, total] = await Promise.all([
         this.prisma.customer.findMany({
           where: whereClause,
           skip,
           take: limit,
-          orderBy: { [sortBy]: sortOrder },
+          orderBy: orderByClause,
           select: {
             id: true,
+            code: true,
             name: true,
+            originalName: true,
+            nameVariations: true,
             phone: true,
             address: true,
             type: true,
             accountType: true,
+            lastPaymentDate: true,
+            paymentPattern: true,
+            dueDays: true,
             tag1: true,
             tag2: true,
             isActive: true,
-            dueDays: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
             balance: {
               select: {
                 totalDebit: true,
@@ -274,5 +295,119 @@ export class CustomerService extends BaseService {
         }
       });
     }, 'Vadesi geçmiş müşteriler getirilemedi');
+  }
+
+  /**
+   * Müşteri istatistiklerini getir
+   */
+  async getCustomerStats(
+    filters: {
+      address?: string;
+      accountType?: string;
+      tag1?: string;
+      tag2?: string;
+      isActive?: boolean;
+      type?: string;
+      hasDebt?: boolean;
+    },
+    userId?: string
+  ): Promise<ApiResponse<{
+    total: number;
+    active: number;
+    debt: number;
+    avgBalance: number;
+  }>> {
+    return this.safeDatabaseOperation(async () => {
+      console.log('🔍 CustomerService.getCustomerStats - Başladı');
+      console.log('🔍 CustomerService.getCustomerStats - userId:', userId);
+      console.log('🔍 CustomerService.getCustomerStats - filters:', filters);
+      
+      const { address, accountType, tag1, tag2, isActive, type, hasDebt } = filters;
+
+      // Kullanıcıya ve filtrelere özel sorgu
+      const whereClause: any = userId ? { userId } : {};
+      if (address) whereClause.address = { contains: address };
+      if (accountType) whereClause.accountType = { contains: accountType };
+      if (tag1) whereClause.tag1 = { contains: tag1 };
+      if (tag2) whereClause.tag2 = { contains: tag2 };
+      if (typeof isActive === 'boolean') whereClause.isActive = isActive;
+      if (type) whereClause.type = type;
+      if (typeof hasDebt === 'boolean') {
+        whereClause.balance = {
+          is: { netBalance: hasDebt ? { lt: 0 } : { gte: 0 } }
+        };
+      }
+
+      console.log('🔍 CustomerService.getCustomerStats - whereClause:', whereClause);
+
+      // Tüm müşterileri getir (sayfalama olmadan)
+      const customers = await this.prisma.customer.findMany({
+        where: whereClause,
+        include: {
+          balance: {
+            select: {
+              netBalance: true
+            }
+          }
+        }
+      });
+
+      console.log('🔍 CustomerService.getCustomerStats - customers count:', customers.length);
+      console.log('🔍 CustomerService.getCustomerStats - İlk 3 müşteri:', customers.slice(0, 3).map(c => ({ id: c.id, name: c.name, userId: c.userId })));
+
+      const total = customers.length;
+      const active = customers.filter(c => c.isActive).length;
+      const debt = customers.filter(c => c.balance && c.balance.netBalance < 0).length;
+      const avgBalance = total > 0 
+        ? customers.reduce((sum, c) => sum + (c.balance?.netBalance || 0), 0) / total 
+        : 0;
+
+      const stats = {
+        total,
+        active,
+        debt,
+        avgBalance
+      };
+
+      console.log('🔍 CustomerService.getCustomerStats - Hesaplanan stats:', stats);
+
+      return stats;
+    }, 'Müşteri istatistikleri getirilemedi');
+  }
+
+  /**
+   * Tüm müşterileri sil
+   */
+  async deleteAllCustomers(userId?: string): Promise<ApiResponse<{ deletedCount: number }>> {
+    return this.safeDatabaseOperation(async () => {
+      console.log('🗑️ CustomerService.deleteAllCustomers - Başladı');
+      console.log('🗑️ CustomerService.deleteAllCustomers - userId:', userId);
+      
+      // Kullanıcıya özel müşterileri bul
+      const whereClause: any = userId ? { userId } : {};
+      console.log('🗑️ CustomerService.deleteAllCustomers - whereClause:', whereClause);
+      
+      // Önce silinecek müşteri sayısını al
+      const customerCount = await this.prisma.customer.count({ where: whereClause });
+      console.log('🗑️ CustomerService.deleteAllCustomers - customerCount:', customerCount);
+      
+      if (customerCount === 0) {
+        console.log('🗑️ CustomerService.deleteAllCustomers - Müşteri sayısı 0, işlem sonlandırılıyor');
+        return { deletedCount: 0 };
+      }
+
+      // Cascade delete eklendiği için artık ilişkili işlemleri kontrol etmeye gerek yok
+      // Tüm ilişkili veriler (transactions, balances, extractTransactions, vb.) otomatik silinecek
+      console.log('🗑️ CustomerService.deleteAllCustomers - Cascade delete aktif, ilişkili veriler otomatik silinecek');
+
+      // Tüm müşterileri sil (cascade ile ilişkili veriler de silinir)
+      console.log('🗑️ CustomerService.deleteAllCustomers - Müşteriler siliniyor...');
+      await this.prisma.customer.deleteMany({
+        where: whereClause
+      });
+
+      console.log('🗑️ CustomerService.deleteAllCustomers - Müşteriler başarıyla silindi');
+      return { deletedCount: customerCount };
+    }, 'Tüm müşteriler silinemedi');
   }
 }

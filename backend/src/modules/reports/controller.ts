@@ -460,7 +460,7 @@ export class ReportController {
   // Müşteri bazında rapor
   static async getCustomerReport(req: Request, res: Response) {
     try {
-      const { startDate, endDate, type, limit = 10 } = req.query;
+      const { startDate, endDate, type, limit = 25 } = req.query;
       const userId = (req as any).user.id;
       const limitNum = Number(limit);
 

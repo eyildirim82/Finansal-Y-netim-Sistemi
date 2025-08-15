@@ -8,7 +8,7 @@ const prisma = new client_1.PrismaClient();
 class TransactionController {
     static async getAllTransactions(req, res) {
         try {
-            const { page = 1, limit = 10, type, categoryId, customerId, startDate, endDate, minAmount, maxAmount, search } = req.query;
+            const { page = 1, limit = 25, type, categoryId, customerId, startDate, endDate, minAmount, maxAmount, search } = req.query;
             const pageNum = Number(page);
             const limitNum = Number(limit);
             if (!Number.isInteger(pageNum) ||

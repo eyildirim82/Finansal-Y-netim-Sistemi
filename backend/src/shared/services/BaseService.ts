@@ -37,7 +37,7 @@ export abstract class BaseService {
    */
   protected validatePaginationParams(params: PaginationParams) {
     const page = Math.max(1, params.page || 1);
-    const limit = Math.min(100, Math.max(1, params.limit || 10));
+    const limit = Math.min(100, Math.max(1, params.limit || 25));
     const sortBy = params.sortBy || 'createdAt';
     const sortOrder = params.sortOrder === 'asc' ? 'asc' : 'desc';
 

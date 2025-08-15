@@ -11,7 +11,7 @@ export class TransactionController {
     try {
       const {
         page = 1,
-        limit = 10,
+        limit = 25,
         type,
         categoryId,
         customerId,

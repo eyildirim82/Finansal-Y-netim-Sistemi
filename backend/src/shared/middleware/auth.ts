@@ -20,10 +20,14 @@ export const authMiddleware = async (
   next: NextFunction
 ) => {
   try {
+    console.log('🔐 Auth middleware - URL:', req.url);
+    console.log('🔐 Auth middleware - Headers:', req.headers);
+    
     // Token'ı header'dan al
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ Auth middleware - Token bulunamadı');
       return res.status(401).json({
         success: false,
         error: 'Yetkilendirme token\'ı gerekli'
@@ -31,9 +35,11 @@ export const authMiddleware = async (
     }
 
     const token = authHeader.substring(7); // "Bearer " kısmını çıkar
+    console.log('🔐 Auth middleware - Token alındı:', token.substring(0, 20) + '...');
 
     // Token'ı doğrula
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    console.log('🔐 Auth middleware - Token doğrulandı, userId:', decoded.userId);
 
     // Kullanıcıyı veritabanından kontrol et
     const user = await prisma.user.findUnique({
@@ -47,7 +53,10 @@ export const authMiddleware = async (
       }
     });
 
+    console.log('🔐 Auth middleware - Kullanıcı bulundu:', user ? 'Evet' : 'Hayır');
+
     if (!user || !user.isActive) {
+      console.log('❌ Auth middleware - Kullanıcı bulunamadı veya pasif');
       return res.status(401).json({
         success: false,
         error: 'Geçersiz veya pasif kullanıcı'
@@ -56,9 +65,11 @@ export const authMiddleware = async (
 
     // Kullanıcıyı request'e ekle
     req.user = user;
+    console.log('✅ Auth middleware - Kullanıcı doğrulandı:', user.username);
     return next();
 
   } catch (error) {
+    console.error('❌ Auth middleware error:', error);
     logError('Auth middleware error:', error);
     
     if (error instanceof jwt.JsonWebTokenError) {

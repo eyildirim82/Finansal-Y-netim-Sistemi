@@ -20,7 +20,7 @@ const Transactions = () => {
   })
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 10,
+    limit: 25,
     total: 0,
     pages: 0
   })
@@ -94,6 +94,11 @@ const Transactions = () => {
   // Sayfa değiştir
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }))
+  }
+
+  // Sayfa boyutu değiştir
+  const handleLimitChange = (newLimit) => {
+    setPagination(prev => ({ ...prev, limit: newLimit, page: 1 }))
   }
 
   // Filtreleri uygula
@@ -299,8 +304,25 @@ const Transactions = () => {
               {/* Pagination */}
               {pagination.pages > 1 && (
                 <div className="flex justify-between items-center mt-6">
-                  <div className="text-sm text-gray-700">
-                    Toplam {pagination.total} işlem, {pagination.pages} sayfa
+                  <div className="flex items-center space-x-4 text-sm text-gray-700">
+                    <span>
+                      Toplam {pagination.total} işlem, {pagination.pages} sayfa
+                    </span>
+                    
+                    {/* Sayfa boyutu seçici */}
+                    <div className="flex items-center space-x-2">
+                      <span>Sayfa başına:</span>
+                      <select
+                        value={pagination.limit}
+                        onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                        className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button

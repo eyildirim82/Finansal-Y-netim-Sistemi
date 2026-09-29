@@ -4,59 +4,60 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function createAdminUser() {
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const email = process.env.ADMIN_EMAIL || 'admin@example.com';
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!password) {
+    throw new Error('ADMIN_PASSWORD environment variable is required.');
+  }
+
   try {
     console.log('👤 Admin kullanıcısı oluşturuluyor...');
-    
-    // Şifreyi hash'le
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    
-    // Admin kullanıcısını oluştur
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const adminUser = await prisma.user.create({
       data: {
-        username: 'admin',
-        email: 'admin@finansal.com',
+        username,
+        email,
         password: hashedPassword,
         role: 'ADMIN',
         isActive: true
       }
     });
-    
+
     console.log('✅ Admin kullanıcısı oluşturuldu:');
     console.log(`   Username: ${adminUser.username}`);
     console.log(`   Email: ${adminUser.email}`);
     console.log(`   Role: ${adminUser.role}`);
     console.log(`   ID: ${adminUser.id}`);
-    console.log(`   Şifre: admin123`);
-    
   } catch (error) {
     if (error.code === 'P2002') {
       console.log('⚠️ Admin kullanıcısı zaten mevcut');
-      
-      // Mevcut admin kullanıcısını güncelle
+
       const updatedUser = await prisma.user.update({
-        where: { username: 'admin' },
+        where: { username },
         data: {
-          password: await bcrypt.hash('admin123', 10),
+          password: await bcrypt.hash(password, 10),
           role: 'ADMIN',
           isActive: true
         }
       });
-      
+
       console.log('✅ Admin kullanıcısı güncellendi:');
       console.log(`   Username: ${updatedUser.username}`);
       console.log(`   Email: ${updatedUser.email}`);
       console.log(`   Role: ${updatedUser.role}`);
-      console.log(`   Yeni şifre: admin123`);
-      
     } else {
       console.error('❌ Admin kullanıcısı oluşturma hatası:', error);
+      throw error;
     }
   } finally {
     await prisma.$disconnect();
   }
 }
 
-// Script'i çalıştır
 if (require.main === module) {
   createAdminUser()
     .then(() => {
@@ -64,7 +65,7 @@ if (require.main === module) {
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Admin kullanıcısı hatası:', error);
+      console.error('❌ Admin kullanıcısı hatası:', error.message);
       process.exit(1);
     });
 }

@@ -1,0 +1,26 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Local financial/customer data
+*.xlsx
+*.xls
+Hesap_Hareketleri_*.pdf
+bank-statements/
+exports/private/
+
+# Logs
+logs/
+*.log

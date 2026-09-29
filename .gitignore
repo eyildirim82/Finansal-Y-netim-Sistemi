@@ -1,2 +1,30 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Logs
 logs/
 backend/logs/
+*.log
+
+# Environment files
+.env
+.env.*
+!*.env.example
+
+# Build output
+dist/
+**/dist/
+build/
+coverage/
+
+# Local/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local financial exports / statements
+Hesap_Hareketleri_*.pdf
+bank-statements/
+exports/private/

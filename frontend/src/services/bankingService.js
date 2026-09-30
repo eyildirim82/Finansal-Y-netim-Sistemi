@@ -19,8 +19,8 @@ const bankingService = {
   stopRealtimeMonitoring: () => apiClient.post('/banking/stop-monitoring'),
   
   // Eşleştirme işlemleri
-  runAutoMatching: () => apiClient.post('/banking/auto-matching'),
-  matchPayment: (data) => apiClient.post('/banking/match-payment', data),
+  runAutoMatching: () => apiClient.post('/banking/run-auto-matching'),
+  matchPayment: (data) => apiClient.post('/banking/match', data),
   
   // PDF işlemleri
   parsePDF: (file) => {
@@ -42,9 +42,9 @@ const bankingService = {
   
   // İşlem silme
   deleteTransaction: (id) => apiClient.delete(`/banking/transactions/${id}`),
-  deleteTransactions: (filters) => apiClient.post('/banking/delete-transactions', filters),
-  cleanupOldTransactions: (date, dryRun = true) => 
-    apiClient.post('/banking/cleanup-transactions', { date, dryRun }),
+  deleteTransactions: (filters) => apiClient.delete('/banking/transactions', { data: filters }),
+  cleanupOldTransactions: (beforeDate, dryRun = true) => 
+    apiClient.post('/banking/cleanup-old-transactions', { beforeDate, dryRun }),
   
   // Eksik işlem analizi
   getMissingTransactions: () => apiClient.get('/banking/missing-transactions')

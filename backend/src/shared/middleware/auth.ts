@@ -21,7 +21,6 @@ export const authMiddleware = async (
 ) => {
   try {
     console.log('🔐 Auth middleware - URL:', req.url);
-    console.log('🔐 Auth middleware - Headers:', req.headers);
     
     // Token'ı header'dan al
     const authHeader = req.headers.authorization;
@@ -35,7 +34,6 @@ export const authMiddleware = async (
     }
 
     const token = authHeader.substring(7); // "Bearer " kısmını çıkar
-    console.log('🔐 Auth middleware - Token alındı:', token.substring(0, 20) + '...');
 
     // Token'ı doğrula
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;

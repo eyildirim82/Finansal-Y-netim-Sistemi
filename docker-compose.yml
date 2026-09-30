@@ -8,12 +8,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_only_change_me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/prisma/migrations:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     networks:
       - finansal_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finansal_user} -d ${POSTGRES_DB:-finansal_yonetim}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -26,14 +30,30 @@ services:
       - finansal_network
     restart: unless-stopped
 
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migration
+    container_name: finansal_migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finansal_user}:${POSTGRES_PASSWORD:-dev_only_change_me}@postgres:5432/${POSTGRES_DB:-finansal_yonetim}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - finansal_network
+    restart: "no"
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: production
     container_name: finansal_backend
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-finansal_user}:${POSTGRES_PASSWORD:-dev_only_change_me}@postgres:5432/${POSTGRES_DB:-finansal_yonetim}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finansal_user}:${POSTGRES_PASSWORD:-dev_only_change_me}@postgres:5432/${POSTGRES_DB:-finansal_yonetim}?schema=public
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me}
       PORT: 3001
@@ -44,8 +64,12 @@ services:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     networks:
       - finansal_network
     restart: unless-stopped

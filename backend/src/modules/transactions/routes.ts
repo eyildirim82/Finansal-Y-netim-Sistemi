@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body, query, param } from 'express-validator';
 import { TransactionController } from './controller';
 import { authMiddleware, roleMiddleware } from '../../shared/middleware/auth';
+import { isPrismaCuid } from '../../shared/validation/cuid';
 
 const router = Router();
 
@@ -22,11 +23,11 @@ const transactionValidation = [
     .withMessage('Geçerli bir tarih formatı giriniz'),
   body('categoryId')
     .optional()
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli bir kategori ID giriniz'),
   body('customerId')
     .optional()
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli bir müşteri ID giriniz'),
   body('reference')
     .optional()
@@ -42,7 +43,7 @@ const transactionValidation = [
 
 const updateTransactionValidation = [
   param('id')
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli bir işlem ID giriniz'),
   ...transactionValidation
 ];
@@ -62,11 +63,11 @@ const queryValidation = [
     .withMessage('Geçerli bir işlem türü giriniz'),
   query('categoryId')
     .optional()
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli bir kategori ID giriniz'),
   query('customerId')
     .optional()
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli bir müşteri ID giriniz'),
   query('startDate')
     .optional()
@@ -99,7 +100,7 @@ router.get('/stats', authMiddleware, TransactionController.getTransactionStats);
 
 // Tek işlem getir
 router.get('/:id', authMiddleware, [
-  param('id').isInt({ min: 1 }).withMessage('Geçerli bir işlem ID giriniz')
+  param('id').custom(isPrismaCuid).withMessage('Geçerli bir işlem ID giriniz')
 ], TransactionController.getTransaction);
 
 // Yeni işlem oluştur
@@ -108,19 +109,19 @@ router.post('/', authMiddleware, transactionValidation, TransactionController.cr
 // İşlem güncelle
 router.put('/:id', authMiddleware, updateTransactionValidation, TransactionController.updateTransaction);
 
-// İşlem sil
-router.delete('/:id', authMiddleware, [
-  param('id').isInt({ min: 1 }).withMessage('Geçerli bir işlem ID giriniz')
-], TransactionController.deleteTransaction);
-
-// Toplu işlem silme (sadece admin)
+// Toplu işlem silme (sadece admin) - generic /:id route'undan önce kayıtlı olmalı.
 router.delete('/bulk/delete', authMiddleware, roleMiddleware(['ADMIN']), [
   body('ids')
     .isArray({ min: 1 })
     .withMessage('En az bir ID gerekli'),
   body('ids.*')
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli ID\'ler giriniz')
 ], TransactionController.deleteMultipleTransactions);
 
-export default router; 
+// İşlem sil
+router.delete('/:id', authMiddleware, [
+  param('id').custom(isPrismaCuid).withMessage('Geçerli bir işlem ID giriniz')
+], TransactionController.deleteTransaction);
+
+export default router;

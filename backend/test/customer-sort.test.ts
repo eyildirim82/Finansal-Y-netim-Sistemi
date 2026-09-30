@@ -1,26 +1,33 @@
-import assert from 'assert';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import Module from 'module';
 
-// Prisma'yı mock'layarak gerçek veritabanı bağlantısını engelle
+let capturedOrderBy: any;
+
+// Prisma'yı mock'layarak gerçek veritabanı bağlantısını engelle.
 const originalRequire = Module.prototype.require;
 Module.prototype.require = function (id: string) {
   if (id === '@prisma/client') {
     return {
       PrismaClient: class {
-        customer = { count: async () => 0, findMany: async () => [] };
+        customer = {
+          count: async () => 0,
+          findMany: async (args: any) => {
+            capturedOrderBy = args.orderBy;
+            return [];
+          }
+        };
       }
     };
   }
   return originalRequire.apply(this, arguments as any);
 };
 
-// Controller'ı mock'tan sonra import etmeliyiz
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// Controller mock kurulduktan sonra yüklenmeli.
 const { CustomerController } = require('../src/modules/customers/controller');
 
-// Basit bir mock Response sınıfı
 class MockResponse {
-  statusCode: number = 200;
+  statusCode = 200;
   body: any;
 
   status(code: number) {
@@ -34,22 +41,38 @@ class MockResponse {
   }
 }
 
-async function runInvalidSortByTest() {
+test('customer balance sorting uses nested Prisma orderBy', async () => {
+  capturedOrderBy = undefined;
+  const controller = new CustomerController();
   const req: any = {
-    query: { sortBy: 'invalid', page: '1', limit: '10' },
-    user: { id: 1 }
+    query: { sortBy: 'balance', sortOrder: 'asc', page: '1', limit: '10' },
+    user: { id: 'user-1' }
   };
   const res = new MockResponse();
 
-  await CustomerController.getAllCustomers(req, res as any);
+  await controller.getCustomers(req, res as any);
 
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body.success, false);
-  console.log('invalid sortBy test passed');
-}
-
-runInvalidSortByTest().catch((err) => {
-  console.error(err);
-  process.exit(1);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.deepEqual(capturedOrderBy, {
+    balance: {
+      netBalance: 'asc'
+    }
+  });
 });
 
+test('customer field sorting uses direct Prisma orderBy', async () => {
+  capturedOrderBy = undefined;
+  const controller = new CustomerController();
+  const req: any = {
+    query: { sortBy: 'name', sortOrder: 'desc', page: '1', limit: '10' },
+    user: { id: 'user-1' }
+  };
+  const res = new MockResponse();
+
+  await controller.getCustomers(req, res as any);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.deepEqual(capturedOrderBy, { name: 'desc' });
+});

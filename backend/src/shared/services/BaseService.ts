@@ -39,7 +39,7 @@ export abstract class BaseService {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(100, Math.max(1, params.limit || 25));
     const sortBy = params.sortBy || 'createdAt';
-    const sortOrder = params.sortOrder === 'asc' ? 'asc' : 'desc';
+    const sortOrder: 'asc' | 'desc' = params.sortOrder === 'asc' ? 'asc' : 'desc';
 
     return { page, limit, sortBy, sortOrder };
   }

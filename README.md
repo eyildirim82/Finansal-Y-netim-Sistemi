@@ -9,12 +9,13 @@
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black" alt="React 18" />
   <img src="https://img.shields.io/badge/TypeScript-backend-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma" alt="Prisma 5" />
+  <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 15" />
   <img src="https://img.shields.io/badge/status-active%20prototype-orange" alt="Active prototype" />
 </p>
 
 A full-stack financial management project that explores day-to-day business finance workflows beyond simple income/expense CRUD: customer accounts, imported account statements, invoice aging, collections reporting, cash-flow views, bank notification parsing and payment matching.
 
-The repository is best understood as an **active engineering prototype**, not a production-ready accounting product. Its strongest portfolio value is the breadth of business workflows, the modular backend structure and the process of hardening a larger application through validation, authentication and automated verification.
+The repository is best understood as an **active engineering prototype**, not a production-ready accounting product. Its strongest portfolio value is the breadth of business workflows, the modular backend structure and the process of hardening a larger application through validation, authentication, database migrations and automated verification.
 
 ## What the project demonstrates
 
@@ -27,18 +28,20 @@ The repository is best understood as an **active engineering prototype**, not a 
 | **Banking experiments** | Authenticated email/PDF transaction processing, unmatched-payment workflows and payment matching |
 | **Frontend** | React application with dashboard, customers, transactions, reports, extracts, banking, cash and import screens |
 | **API hardening** | Helmet, CORS, compression, rate limiting, CUID-aware validation, centralized error handling and router-level banking authentication |
-| **Verification** | GitHub Actions runs backend TypeScript build/tests plus frontend ESLint and production build on pull requests and `main` |
+| **Database lifecycle** | Prisma schema, PostgreSQL migration baseline and an explicit Compose migration service before application startup |
+| **Verification** | GitHub Actions provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
 
 ## Current project status
 
-The application has substantial feature code and an automated verification baseline. The main remaining repository-level inconsistency is the database target:
+PostgreSQL 15 is now the canonical database runtime across the Prisma schema, committed migration baseline, Docker Compose and CI verification.
 
-- the committed Prisma schema and migration lock currently use **SQLite**;
-- `docker-compose.yml` defines a **PostgreSQL 15** deployment target, so the Compose database configuration and committed Prisma migrations are not yet aligned;
-- several financial amount fields are still represented as Prisma `Float`, which is acceptable for a prototype but should be migrated to exact decimal storage before treating the system as accounting-grade software;
-- banking/email integration depends on external configuration and should still be considered experimental despite its authenticated API boundary.
+The remaining pre-production concerns are more focused:
 
-For portfolio purposes, this repository is therefore an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
+- several financial amount fields are still represented as Prisma `Float`; these should be migrated to exact decimal storage before treating the system as accounting-grade software;
+- banking/email integration depends on external configuration and provider-specific notification formats, so it should still be considered experimental despite its authenticated API boundary;
+- some debug-oriented surfaces and broader integration scenarios still need cleanup and coverage before deployment should be treated as mature.
+
+For portfolio purposes, this repository is an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
 
 ## Architecture
 
@@ -62,10 +65,10 @@ Express + TypeScript
 Prisma ORM
        │
        ▼
-SQLite (current committed schema)
+PostgreSQL 15
 ```
 
-A broader Docker Compose stack is also present for a future/containerized deployment shape with PostgreSQL, Redis, Nginx and monitoring services. The database layer needs migration alignment before that stack should be treated as the canonical runtime.
+The Docker Compose stack also includes Redis, Nginx and monitoring services. A dedicated migration container runs `prisma migrate deploy` against a healthy PostgreSQL service, and the backend waits for that migration step to complete successfully before starting.
 
 ## Domain model
 
@@ -208,15 +211,20 @@ GitHub Actions provides a repository-level verification gate for pull requests a
 
 ### Backend
 
+CI provisions a clean PostgreSQL 15 service and verifies the committed migration baseline before exercising the application:
+
 ```bash
 cd backend
 npm ci
 npx prisma generate
+npx prisma migrate deploy
 npm run build
 npm test
 ```
 
-CI currently uses a temporary SQLite database URL because SQLite is still the committed Prisma provider. The test runner discovers both JavaScript and TypeScript test files.
+After build/tests pass, the workflow starts the compiled API and polls the real `/health` endpoint. This catches failures that only appear during application startup or database initialization.
+
+The test runner discovers both JavaScript and TypeScript test files.
 
 ### Frontend
 
@@ -228,6 +236,8 @@ npm run build
 ```
 
 The checked-in ESLint baseline includes React Hooks correctness checks and is run before the production Vite build.
+
+The workflow also validates the Docker Compose configuration so service dependency changes fail early.
 
 ## Frontend
 
@@ -251,10 +261,11 @@ Current page-level features include dashboard, transactions, customers/customer 
 
 The backend uses:
 
-- Node.js
+- Node.js 20 in CI/container builds
 - Express 4
 - TypeScript
 - Prisma 5
+- PostgreSQL 15
 - JWT + bcryptjs
 - express-validator
 - Multer
@@ -267,9 +278,9 @@ The backend uses:
 
 ```text
 ├── .github/workflows/
-│   └── verify.yml             # Backend build/tests + frontend lint/build
+│   └── verify.yml             # PostgreSQL migration + backend verification + frontend lint/build
 ├── backend/
-│   ├── prisma/                 # Current SQLite schema and migrations
+│   ├── prisma/                 # PostgreSQL schema and migration baseline
 │   ├── src/
 │   │   ├── modules/
 │   │   │   ├── auth/
@@ -293,22 +304,41 @@ The backend uses:
 └── docker-compose.yml
 ```
 
-## Running the current development setup
+## Running locally
 
-The safest starting point is to run the backend and frontend separately against the database configuration expected by the committed Prisma schema.
+### Requirements
 
-### Backend
+- Node.js 20+
+- PostgreSQL 15+ for direct host development, or Docker Compose
+- npm
+
+Copy the repository-level environment template first:
+
+```bash
+cp .env.example .env
+```
+
+### Full Compose stack
+
+```bash
+docker compose up --build
+```
+
+Compose waits for PostgreSQL health, runs the committed Prisma migrations through the one-shot `migrate` service and starts the backend only after migration success.
+
+### Backend directly on the host
+
+Start PostgreSQL matching the `DATABASE_URL` in `.env`, then:
 
 ```bash
 cd backend
 npm install
-cp ../.env.example .env
 npm run prisma:generate
-npm run prisma:migrate
+npx prisma migrate deploy
 npm run dev
 ```
 
-### Frontend
+### Frontend directly on the host
 
 ```bash
 cd frontend
@@ -316,17 +346,15 @@ npm install
 npm run dev
 ```
 
-Before using the Docker Compose stack, first align the Prisma datasource/migrations with the PostgreSQL configuration in `docker-compose.yml`.
-
 ## Development priorities
 
 The highest-value next steps for this repository are now:
 
-1. align Prisma schema/migrations and Docker Compose around one canonical PostgreSQL runtime;
-2. migrate financial money fields from floating-point storage to exact decimal types;
-3. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
-4. add deterministic demo data and portfolio screenshots after the database baseline is stable;
-5. expand integration coverage around imports, reporting and banking workflows.
+1. migrate financial money fields from floating-point storage to exact decimal types;
+2. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
+3. add deterministic demo data and portfolio screenshots;
+4. expand integration coverage around imports, reporting and banking workflows;
+5. continue dependency/security maintenance as the prototype matures.
 
 ## Why this repository is in the portfolio
 

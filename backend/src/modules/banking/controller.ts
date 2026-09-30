@@ -1,4 +1,5 @@
 import { logError } from '../../shared/logger';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { YapiKrediFASTEmailService } from './emailService';
@@ -749,8 +750,8 @@ export class BankingController {
       
       // Başlangıç bakiyesini hesapla
       const firstTransaction = transactions[0];
-      const startBalance = (firstTransaction.balanceAfter || 0) - 
-        (firstTransaction.direction === 'IN' ? firstTransaction.amount : -firstTransaction.amount);
+      const startBalance = moneyToNumber(firstTransaction.balanceAfter) - 
+        (firstTransaction.direction === 'IN' ? moneyToNumber(firstTransaction.amount) : -moneyToNumber(firstTransaction.amount));
       
       // Her işlem için bakiye farkını hesapla
       let currentBalance = startBalance;
@@ -761,21 +762,21 @@ export class BankingController {
         
         // İşlem tutarını hesapla
         if (tx.direction === 'IN') {
-          currentBalance += tx.amount;
+          currentBalance += moneyToNumber(tx.amount);
         } else {
-          currentBalance -= tx.amount;
+          currentBalance -= moneyToNumber(tx.amount);
         }
         
         // Bakiye farkını hesapla
         if (tx.balanceAfter) {
-          const difference = tx.balanceAfter - currentBalance;
+          const difference = moneyToNumber(tx.balanceAfter) - currentBalance;
           
           if (Math.abs(difference) > 1.0) { // 1 TL'den fazla fark
             balanceGaps.push({
               index: i,
               transaction: tx,
               expectedBalance: currentBalance,
-              actualBalance: tx.balanceAfter,
+              actualBalance: moneyToNumber(tx.balanceAfter),
               difference: difference,
               missingAmount: Math.abs(difference),
               isCritical: Math.abs(difference) > 100
@@ -1140,7 +1141,7 @@ export class BankingController {
         where: whereClause
       });
 
-      const totalAmount = transactionsToDelete.reduce((sum, tx) => sum + tx.amount, 0);
+      const totalAmount = transactionsToDelete.reduce((sum, tx) => sum + moneyToNumber(tx.amount), 0);
 
       return res.json({
         success: true,
@@ -1217,7 +1218,7 @@ export class BankingController {
 
       if (dryRun) {
         // Sadece önizleme
-        const totalAmount = oldTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        const totalAmount = oldTransactions.reduce((sum, tx) => sum + moneyToNumber(tx.amount), 0);
         
         return res.json({
           success: true,
@@ -1255,7 +1256,7 @@ export class BankingController {
         }
       });
 
-      const totalAmount = oldTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+      const totalAmount = oldTransactions.reduce((sum, tx) => sum + moneyToNumber(tx.amount), 0);
 
       return res.json({
         success: true,

@@ -1,4 +1,5 @@
 import { logError } from '../../shared/logger';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
@@ -930,9 +931,9 @@ export class ExtractController {
           await prisma.balance.update({
             where: { customerId },
             data: {
-              totalDebit: existingBalance.totalDebit + totalDebit,
-              totalCredit: existingBalance.totalCredit + totalCredit,
-              netBalance: (existingBalance.totalCredit + totalCredit) - (existingBalance.totalDebit + totalDebit),
+              totalDebit: existingBalance.totalDebit.plus(totalDebit),
+              totalCredit: existingBalance.totalCredit.plus(totalCredit),
+              netBalance: existingBalance.totalCredit.plus(totalCredit).minus(existingBalance.totalDebit.plus(totalDebit)),
               lastUpdated: new Date()
             }
           });
@@ -1064,7 +1065,7 @@ export class ExtractController {
         include: { balance: true }
       });
 
-      const expectedBalance = customer?.balance?.netBalance || 0;
+      const expectedBalance = moneyToNumber(customer?.balance?.netBalance);
       const isMatched = Math.abs(balance.netBalance - expectedBalance) < 0.01;
 
       validationResults.push({

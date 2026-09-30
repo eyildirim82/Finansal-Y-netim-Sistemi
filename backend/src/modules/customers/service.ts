@@ -1,6 +1,7 @@
 import { BaseService } from '../../shared/services/BaseService';
 import { ApiResponse, PaginationParams, PaginatedResponse } from '../../shared/types';
 import { Customer } from '@prisma/client';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 
 export class CustomerService extends BaseService {
   
@@ -357,9 +358,9 @@ export class CustomerService extends BaseService {
 
       const total = customers.length;
       const active = customers.filter(c => c.isActive).length;
-      const debt = customers.filter(c => c.balance && c.balance.netBalance < 0).length;
+      const debt = customers.filter(c => c.balance && moneyToNumber(c.balance.netBalance) < 0).length;
       const avgBalance = total > 0 
-        ? customers.reduce((sum, c) => sum + (c.balance?.netBalance || 0), 0) / total 
+        ? customers.reduce((sum, c) => sum + moneyToNumber(c.balance?.netBalance), 0) / total 
         : 0;
 
       const stats = {

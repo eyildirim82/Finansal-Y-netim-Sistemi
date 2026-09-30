@@ -1,4 +1,5 @@
 import { logError } from '../../shared/logger';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { validationResult } from 'express-validator';
@@ -447,10 +448,10 @@ export class TransactionController {
       const stats = {
         summary: {
           totalTransactions: totalStats._count?.id || 0,
-          totalAmount: totalStats._sum?.amount || 0,
-          totalIncome: incomeStats._sum?.amount || 0,
+          totalAmount: moneyToNumber(totalStats._sum?.amount),
+          totalIncome: moneyToNumber(incomeStats._sum?.amount),
           totalExpense: expenseStats._count?.id || 0,
-          netAmount: (incomeStats._sum?.amount || 0) - (expenseStats._sum?.amount || 0)
+          netAmount: moneyToNumber(incomeStats._sum?.amount) - moneyToNumber(expenseStats._sum?.amount)
         },
         categoryStats,
         customerStats

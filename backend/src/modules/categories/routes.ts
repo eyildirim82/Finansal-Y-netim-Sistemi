@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body, query, param } from 'express-validator';
 import { CategoryController } from './controller';
 import { authMiddleware } from '../../shared/middleware/auth';
+import { isPrismaCuid } from '../../shared/validation/cuid';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ const categoryValidation = [
 
 const updateCategoryValidation = [
   param('id')
-    .isInt({ min: 1 })
+    .custom(isPrismaCuid)
     .withMessage('Geçerli bir kategori ID giriniz'),
   ...categoryValidation
 ];
@@ -68,12 +69,12 @@ router.get('/search', authMiddleware, searchValidation, CategoryController.searc
 
 // Tek kategori getir
 router.get('/:id', authMiddleware, [
-  param('id').isInt({ min: 1 }).withMessage('Geçerli bir kategori ID giriniz')
+  param('id').custom(isPrismaCuid).withMessage('Geçerli bir kategori ID giriniz')
 ], CategoryController.getCategory);
 
 // Kategori istatistikleri
 router.get('/:categoryId/stats', authMiddleware, [
-  param('categoryId').isInt({ min: 1 }).withMessage('Geçerli bir kategori ID giriniz')
+  param('categoryId').custom(isPrismaCuid).withMessage('Geçerli bir kategori ID giriniz')
 ], CategoryController.getCategoryStats);
 
 // Yeni kategori oluştur
@@ -84,7 +85,7 @@ router.put('/:id', authMiddleware, updateCategoryValidation, CategoryController.
 
 // Kategori sil
 router.delete('/:id', authMiddleware, [
-  param('id').isInt({ min: 1 }).withMessage('Geçerli bir kategori ID giriniz')
+  param('id').custom(isPrismaCuid).withMessage('Geçerli bir kategori ID giriniz')
 ], CategoryController.deleteCategory);
 
-export default router; 
+export default router;

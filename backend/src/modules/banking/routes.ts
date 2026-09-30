@@ -32,6 +32,10 @@ const upload = multer({
   }
 });
 
+// Banka modülündeki tüm endpoint'ler hassas finansal/veri işleme işlemleridir.
+// Tek tek route'larda auth unutulmaması için router seviyesinde zorunlu tut.
+router.use(authMiddleware);
+
 // Otomatik email çekme
 router.post('/fetch-emails', controller.fetchEmails.bind(controller));
 
@@ -62,7 +66,6 @@ router.get('/matching-stats', controller.getMatchingStats.bind(controller));
 // Otomatik eşleştirme çalıştır
 router.post('/run-auto-matching', controller.runAutoMatching.bind(controller));
 
-// Yeni endpoint'ler
 // Email istatistikleri
 router.get('/email-stats', controller.getEmailStats.bind(controller));
 
@@ -77,29 +80,18 @@ router.post('/stop-monitoring', controller.stopRealtimeMonitoring.bind(controlle
 router.put('/email-settings', controller.updateEmailSettings.bind(controller));
 
 // Eksik işlem tespiti
-router.get('/missing-transactions', authMiddleware, controller.detectMissingTransactions.bind(controller));
+router.get('/missing-transactions', controller.detectMissingTransactions.bind(controller));
 
 // PDF işlemleri
-// PDF hesap hareketlerini parse et
-router.post('/parse-pdf', authMiddleware, upload.single('pdf'), controller.parsePDFTransactions.bind(controller));
-
-// PDF'den çıkarılan işlemleri kaydet
-router.post('/save-pdf-transactions', authMiddleware, controller.savePDFTransactions.bind(controller));
+router.post('/parse-pdf', upload.single('pdf'), controller.parsePDFTransactions.bind(controller));
+router.post('/save-pdf-transactions', controller.savePDFTransactions.bind(controller));
 
 // İşlem silme endpoint'leri
-// Tek işlem sil
-router.delete('/transactions/:transactionId', authMiddleware, controller.deleteTransaction.bind(controller));
+router.delete('/transactions/:transactionId', controller.deleteTransaction.bind(controller));
+router.delete('/transactions', controller.deleteTransactions.bind(controller));
+router.post('/cleanup-old-transactions', controller.cleanupOldTransactions.bind(controller));
 
-// Toplu işlem silme
-router.delete('/transactions', authMiddleware, controller.deleteTransactions.bind(controller));
+// ETL PDF işleme
+router.post('/process-pdf-etl', upload.single('pdf'), controller.processPDFWithETL.bind(controller));
 
-// Eski işlemleri temizle
-router.post('/cleanup-old-transactions', authMiddleware, controller.cleanupOldTransactions.bind(controller));
-
-// Yeni ETL PDF işleme endpoint'i
-router.post('/process-pdf-etl', authMiddleware, upload.single('pdf'), controller.processPDFWithETL.bind(controller));
-
-// Test için auth olmayan ETL endpoint'i
-router.post('/test-process-pdf-etl', upload.single('pdf'), controller.processPDFWithETL.bind(controller));
-
-export default router; 
+export default router;

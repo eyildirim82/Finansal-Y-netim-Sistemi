@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/eyildirim82/Finansal-Y-netim-Sistemi/actions/workflows/verify.yml"><img src="https://github.com/eyildirim82/Finansal-Y-netim-Sistemi/actions/workflows/verify.yml/badge.svg" alt="Verify" /></a>
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black" alt="React 18" />
   <img src="https://img.shields.io/badge/TypeScript-backend-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma" alt="Prisma 5" />
@@ -13,7 +14,7 @@
 
 A full-stack financial management project that explores day-to-day business finance workflows beyond simple income/expense CRUD: customer accounts, imported account statements, invoice aging, collections reporting, cash-flow views, bank notification parsing and payment matching.
 
-The repository is best understood as an **active engineering prototype**, not a production-ready accounting product. Its strongest portfolio value is the breadth of business workflows and the modular backend structure; several integration and deployment boundaries still need consolidation before production use.
+The repository is best understood as an **active engineering prototype**, not a production-ready accounting product. Its strongest portfolio value is the breadth of business workflows, the modular backend structure and the process of hardening a larger application through validation, authentication and automated verification.
 
 ## What the project demonstrates
 
@@ -23,22 +24,21 @@ The repository is best understood as an **active engineering prototype**, not a 
 | **Financial workflows** | Income/expense records, customer accounts, statement transactions, balances, paid/unpaid invoice views and collections reporting |
 | **Reporting** | Dashboard summaries, monthly/daily trends, category/customer reports, cash flow, aging, collections and invoice-oriented reporting routes |
 | **Import pipeline** | Authenticated Excel/CSV/customer imports with file-type and size validation |
-| **Banking experiments** | Email/PDF transaction parsing, unmatched-payment workflows and payment-matching models |
+| **Banking experiments** | Authenticated email/PDF transaction processing, unmatched-payment workflows and payment matching |
 | **Frontend** | React application with dashboard, customers, transactions, reports, extracts, banking, cash and import screens |
-| **API hardening** | Helmet, CORS configuration, compression, global rate limiting, request validation and centralized error handling |
-| **Authentication** | JWT-based protected routes, bcrypt password hashing and role-aware middleware |
+| **API hardening** | Helmet, CORS, compression, rate limiting, CUID-aware validation, centralized error handling and router-level banking authentication |
+| **Verification** | GitHub Actions runs backend TypeScript build/tests plus frontend ESLint and production build on pull requests and `main` |
 
 ## Current project status
 
-The application has substantial feature code, but a few repository-level inconsistencies are intentionally documented here instead of hidden:
+The application has substantial feature code and an automated verification baseline. The main remaining repository-level inconsistency is the database target:
 
 - the committed Prisma schema and migration lock currently use **SQLite**;
 - `docker-compose.yml` defines a **PostgreSQL 15** deployment target, so the Compose database configuration and committed Prisma migrations are not yet aligned;
-- some older route validation code still assumes numeric IDs even though current Prisma entities use `cuid()` string IDs;
-- the banking module mixes authenticated and unauthenticated routes and should receive an authorization pass before any production deployment;
-- automated tests exist for selected backend utilities/behaviors, but the repository does not yet have a complete CI verification pipeline.
+- several financial amount fields are still represented as Prisma `Float`, which is acceptable for a prototype but should be migrated to exact decimal storage before treating the system as accounting-grade software;
+- banking/email integration depends on external configuration and should still be considered experimental despite its authenticated API boundary.
 
-For portfolio purposes, this repository should therefore be read as an example of **business-domain modeling and full-stack feature development in progress**, rather than a finished finance platform.
+For portfolio purposes, this repository is therefore an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
 
 ## Architecture
 
@@ -65,7 +65,7 @@ Prisma ORM
 SQLite (current committed schema)
 ```
 
-A broader Docker Compose stack is also present for a future/containerized deployment shape with PostgreSQL, Redis, Nginx and monitoring services. The database layer needs migration alignment before that stack should be treated as production-ready.
+A broader Docker Compose stack is also present for a future/containerized deployment shape with PostgreSQL, Redis, Nginx and monitoring services. The database layer needs migration alignment before that stack should be treated as the canonical runtime.
 
 ## Domain model
 
@@ -98,9 +98,11 @@ GET  /api/auth/profile
 PUT  /api/auth/change-password
 ```
 
+JWT middleware resolves the authenticated user from the database and role-aware middleware is available for privileged operations.
+
 ### Transactions
 
-Transaction routes support authenticated CRUD, statistics, filtering and pagination. Validation covers transaction type, amount, dates and query bounds.
+Transaction routes support authenticated CRUD, statistics, filtering and pagination. Route and relation IDs are validated against the CUID shape used by the Prisma schema.
 
 ```text
 GET    /api/transactions
@@ -180,7 +182,9 @@ The repository includes:
 - automatic/manual matching actions
 - a dedicated banking UI
 
-This area is still experimental. In particular, route-level authentication is not yet applied consistently, so it should not be considered production hardened.
+Banking routes are protected at router level by the shared authentication middleware. The former unauthenticated test ETL route has been removed from the production router, and the frontend banking service has been aligned with the backend route contract.
+
+The external bank-email integration itself remains experimental because it depends on provider-specific notification formats and runtime mailbox configuration.
 
 ## Security and API middleware
 
@@ -194,9 +198,36 @@ The main Express application configures:
 - centralized error handling
 - JWT middleware for protected modules
 - role-aware middleware for privileged actions
-- `express-validator` rules on multiple APIs
+- CUID-aware `express-validator` rules on identifier-based routes
 
-These controls provide a useful application-security baseline, while the banking authorization gap noted above remains an explicit hardening item.
+Sensitive authorization headers and token fragments are not written to authentication logs.
+
+## Verification and CI
+
+GitHub Actions provides a repository-level verification gate for pull requests and pushes to `main`.
+
+### Backend
+
+```bash
+cd backend
+npm ci
+npx prisma generate
+npm run build
+npm test
+```
+
+CI currently uses a temporary SQLite database URL because SQLite is still the committed Prisma provider. The test runner discovers both JavaScript and TypeScript test files.
+
+### Frontend
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
+
+The checked-in ESLint baseline includes React Hooks correctness checks and is run before the production Vite build.
 
 ## Frontend
 
@@ -232,18 +263,11 @@ The backend uses:
 - PDF parsing
 - Pino logging
 
-Selected tests can be run with:
-
-```bash
-cd backend
-npm install
-npm test
-npm run build
-```
-
 ## Project structure
 
 ```text
+├── .github/workflows/
+│   └── verify.yml             # Backend build/tests + frontend lint/build
 ├── backend/
 │   ├── prisma/                 # Current SQLite schema and migrations
 │   ├── src/
@@ -296,17 +320,16 @@ Before using the Docker Compose stack, first align the Prisma datasource/migrati
 
 ## Development priorities
 
-The highest-value next steps for this repository are:
+The highest-value next steps for this repository are now:
 
-1. choose one canonical database target and align Prisma schema, migrations and Docker Compose;
-2. update ID validation to match the `cuid()`-based schema;
-3. require authentication/authorization consistently across banking routes;
-4. add CI for backend build/tests and frontend lint/build;
-5. remove or isolate debug-only endpoints/screens before treating the app as deployable;
-6. add deterministic demo data and screenshots once the integration baseline is stable.
+1. align Prisma schema/migrations and Docker Compose around one canonical PostgreSQL runtime;
+2. migrate financial money fields from floating-point storage to exact decimal types;
+3. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
+4. add deterministic demo data and portfolio screenshots after the database baseline is stable;
+5. expand integration coverage around imports, reporting and banking workflows.
 
 ## Why this repository is in the portfolio
 
-This project is useful as a record of working through a broad business domain: customer ledgers, bank activity, file imports, invoice aging, collections and reporting. It complements smaller, more finished projects by showing how a larger application can be decomposed into domain modules and expanded iteratively.
+This project is useful as a record of working through a broad business domain: customer ledgers, bank activity, file imports, invoice aging, collections and reporting. It complements smaller, more finished projects by showing how a larger application can be decomposed into domain modules and hardened iteratively.
 
-It is intentionally presented with its current technical debt visible. The repository is a development project, not a claim of production accounting-software readiness.
+It is intentionally presented with its remaining technical debt visible. The repository is a development project, not a claim of production accounting-software readiness.

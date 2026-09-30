@@ -75,9 +75,9 @@ model Category {
   updatedAt DateTime @updatedAt
 
   // İlişkiler
-  parent     Category?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children   Category[]  @relation("CategoryHierarchy")
-  user       User?       @relation(fields: [userId], references: [id])
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children     Category[]    @relation("CategoryHierarchy")
+  user         User?         @relation(fields: [userId], references: [id])
   transactions Transaction[]
 
   @@unique([name, type])
@@ -86,51 +86,51 @@ model Category {
 
 // İşlemler (Birleştirilmiş)
 model Transaction {
-  id          String          @id @default(cuid())
+  id          String   @id @default(cuid())
   type        String
-  amount      Float
-  currency    String          @default("TRY")
+  amount      Decimal  @db.Decimal(18, 2)
+  currency    String   @default("TRY")
   description String?
   date        DateTime
   categoryId  String?
   customerId  String?
   userId      String
-  sourceFile  String?         // Import edilen dosya
-  sourceRow   Int?            // Excel satır numarası
-  metadata    String?         // Ek veriler (JSON string olarak saklanacak)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  sourceFile  String?  // Import edilen dosya
+  sourceRow   Int?     // Excel satır numarası
+  metadata    String?  // Ek veriler (JSON string olarak saklanacak)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // İlişkiler
-  category Category?  @relation(fields: [categoryId], references: [id])
-  customer Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  user     User       @relation(fields: [userId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id])
 
   @@map("transactions")
 }
 
 // PDF'den Parse Edilen İşlemler
 model PDFTransaction {
-  id                String   @id
-  dateTime          String?
-  dateTimeIso       String
-  description       String?
-  debit             Float    @default(0)
-  credit            Float    @default(0)
-  amount            Float
-  currency          String
-  balance           Float
-  balanceCurrency   String
-  operation         String?
-  channel           String?
-  direction         String?
-  counterpartyName  String?
-  counterpartyIban  String?
-  hash              String   @unique
-  raw               String?
-  category          String?
-  tags              String?  // JSON array string
-  createdAt         DateTime @default(now())
+  id               String   @id
+  dateTime         String?
+  dateTimeIso      String
+  description      String?
+  debit            Decimal  @default(0) @db.Decimal(18, 2)
+  credit           Decimal  @default(0) @db.Decimal(18, 2)
+  amount           Decimal  @db.Decimal(18, 2)
+  currency         String
+  balance          Decimal  @db.Decimal(18, 2)
+  balanceCurrency  String
+  operation        String?
+  channel          String?
+  direction        String?
+  counterpartyName String?
+  counterpartyIban String?
+  hash             String   @unique
+  raw              String?
+  category         String?
+  tags             String?  // JSON array string
+  createdAt        DateTime @default(now())
 
   @@map("pdf_transactions")
 }
@@ -139,9 +139,9 @@ model PDFTransaction {
 model Balance {
   id           String   @id @default(cuid())
   customerId   String   @unique
-  totalDebit   Float    @default(0)
-  totalCredit  Float    @default(0)
-  netBalance   Float    @default(0)
+  totalDebit   Decimal  @default(0) @db.Decimal(18, 2)
+  totalCredit  Decimal  @default(0) @db.Decimal(18, 2)
+  netBalance   Decimal  @default(0) @db.Decimal(18, 2)
   lastUpdated  DateTime @default(now())
 
   // İlişkiler
@@ -166,7 +166,7 @@ model Extract {
   updatedAt     DateTime @updatedAt
 
   // İlişkiler
-  user         User                @relation(fields: [userId], references: [id])
+  user         User                 @relation(fields: [userId], references: [id])
   transactions ExtractTransaction[]
 
   @@map("extracts")
@@ -179,15 +179,15 @@ model ExtractTransaction {
   customerId   String?
   date         DateTime
   description  String
-  debit        Float     @default(0)
-  credit       Float     @default(0)
+  debit        Decimal   @default(0) @db.Decimal(18, 2)
+  credit       Decimal   @default(0) @db.Decimal(18, 2)
   documentType String?
   voucherNo    String?   // Evrak No
   dueDate      DateTime? // Vade Tarihi
-  amountBase   Float     @default(0) // Matrah
-  discount     Float     @default(0) // İskonto
-  amountNet    Float     @default(0) // Net Matrah
-  vat          Float     @default(0) // KDV
+  amountBase   Decimal   @default(0) @db.Decimal(18, 2) // Matrah
+  discount     Decimal   @default(0) @db.Decimal(18, 2) // İskonto tutarı
+  amountNet    Decimal   @default(0) @db.Decimal(18, 2) // Net Matrah
+  vat          Decimal   @default(0) @db.Decimal(18, 2) // KDV tutarı
   sourceRow    Int
   createdAt    DateTime  @default(now())
 
@@ -200,33 +200,31 @@ model ExtractTransaction {
   @@map("extract_transactions")
 }
 
-
-
 // ===== YAPI KREDİ SİSTEMİ TABLOLARI =====
 
 // Banka İşlemleri
 model BankTransaction {
-  id              String   @id @default(cuid())
-  messageId       String   @unique
-  bankCode        String   @default("YAPIKREDI")
-  direction       String   // 'IN', 'OUT'
-  accountIban     String
-  maskedAccount   String?
-  transactionDate DateTime
-  amount          Float
-  senderName      String?
-  counterpartyName String?
-  balanceAfter    Float?
-  isMatched       Boolean  @default(false)
+  id                String   @id @default(cuid())
+  messageId         String   @unique
+  bankCode          String   @default("YAPIKREDI")
+  direction         String   // 'IN', 'OUT'
+  accountIban       String
+  maskedAccount     String?
+  transactionDate   DateTime
+  amount            Decimal  @db.Decimal(18, 2)
+  senderName        String?
+  counterpartyName  String?
+  balanceAfter      Decimal? @db.Decimal(18, 2)
+  isMatched         Boolean  @default(false)
   matchedCustomerId String?
-  confidenceScore Float?   // 0-1 arası
-  rawEmailData    String?  // Ham e-posta verisi (JSON)
-  parsedData      String?  // Parse edilmiş veri (JSON)
-  createdAt       DateTime @default(now())
-  processedAt     DateTime?
+  confidenceScore   Float?   // 0-1 arası; parasal değer değil
+  rawEmailData      String?  // Ham e-posta verisi (JSON)
+  parsedData        String?  // Parse edilmiş veri (JSON)
+  createdAt         DateTime @default(now())
+  processedAt       DateTime?
 
   // İlişkiler
-  customer       Customer?       @relation(fields: [matchedCustomerId], references: [id], onDelete: Cascade)
+  customer       Customer?      @relation(fields: [matchedCustomerId], references: [id], onDelete: Cascade)
   paymentMatches PaymentMatch[]
 
   @@map("bank_transactions")
@@ -237,8 +235,8 @@ model PaymentMatch {
   id                String   @id @default(cuid())
   bankTransactionId String
   customerId        String
-  matchedAmount     Float
-  confidenceScore   Float    // 0-1 arası
+  matchedAmount     Decimal  @db.Decimal(18, 2)
+  confidenceScore   Float    // 0-1 arası; parasal değer değil
   matchMethod       String   // 'auto_name', 'auto_amount', 'manual'
   isConfirmed       Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -256,11 +254,11 @@ model PaymentMatch {
 model CashFlow {
   id             String   @id @default(cuid())
   date           DateTime
-  openingBalance Float
-  closingBalance Float
-  totalIncome    Float    @default(0)
-  totalExpense   Float    @default(0)
-  difference     Float    @default(0)
+  openingBalance Decimal  @db.Decimal(18, 2)
+  closingBalance Decimal  @db.Decimal(18, 2)
+  totalIncome    Decimal  @default(0) @db.Decimal(18, 2)
+  totalExpense   Decimal  @default(0) @db.Decimal(18, 2)
+  difference     Decimal  @default(0) @db.Decimal(18, 2)
   notes          String?
   userId         String
   createdAt      DateTime @default(now())
@@ -299,5 +297,3 @@ model AuditLog {
 
   @@map("audit_logs")
 }
-
- 

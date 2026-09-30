@@ -1,4 +1,5 @@
 import { logError } from '../../shared/logger';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -101,21 +102,21 @@ export class ReportController {
       });
 
       res.json({
-        totalIncome: incomeStats._sum.amount || 0,
-        totalExpense: expenseStats._sum.amount || 0,
-        netAmount: (incomeStats._sum.amount || 0) - (expenseStats._sum.amount || 0),
+        totalIncome: moneyToNumber(incomeStats._sum.amount),
+        totalExpense: moneyToNumber(expenseStats._sum.amount),
+        netAmount: moneyToNumber(incomeStats._sum.amount) - moneyToNumber(expenseStats._sum.amount),
         totalTransactions: transactionCount,
         customerCount,
         monthlyComparison: {
           currentMonth: {
-            income: currentMonthIncome._sum.amount || 0,
-            expense: currentMonthExpense._sum.amount || 0,
-            net: (currentMonthIncome._sum.amount || 0) - (currentMonthExpense._sum.amount || 0)
+            income: moneyToNumber(currentMonthIncome._sum.amount),
+            expense: moneyToNumber(currentMonthExpense._sum.amount),
+            net: moneyToNumber(currentMonthIncome._sum.amount) - moneyToNumber(currentMonthExpense._sum.amount)
           },
           lastMonth: {
-            income: lastMonthIncome._sum.amount || 0,
-            expense: lastMonthExpense._sum.amount || 0,
-            net: (lastMonthIncome._sum.amount || 0) - (lastMonthExpense._sum.amount || 0)
+            income: moneyToNumber(lastMonthIncome._sum.amount),
+            expense: moneyToNumber(lastMonthExpense._sum.amount),
+            net: moneyToNumber(lastMonthIncome._sum.amount) - moneyToNumber(lastMonthExpense._sum.amount)
           }
         }
       });
@@ -430,15 +431,15 @@ export class ReportController {
         return {
           category,
           income: {
-            amount: incomeStats?._sum.amount || 0,
+            amount: moneyToNumber(incomeStats?._sum.amount),
             count: incomeStats?._count || 0
           },
           expense: {
-            amount: expenseStats?._sum.amount || 0,
+            amount: moneyToNumber(expenseStats?._sum.amount),
             count: expenseStats?._count || 0
           },
           total: {
-            amount: (incomeStats?._sum.amount || 0) + (expenseStats?._sum.amount || 0),
+            amount: moneyToNumber(incomeStats?._sum.amount) + moneyToNumber(expenseStats?._sum.amount),
             count: (incomeStats?._count || 0) + (expenseStats?._count || 0)
           }
         };
@@ -513,8 +514,8 @@ export class ReportController {
           stat.customerId === customer.id && stat.type === 'EXPENSE'
         );
 
-        const totalIncome = incomeStats?._sum.amount || 0;
-        const totalExpense = expenseStats?._sum.amount || 0;
+        const totalIncome = moneyToNumber(incomeStats?._sum.amount);
+        const totalExpense = moneyToNumber(expenseStats?._sum.amount);
 
         return {
           customer,
@@ -694,19 +695,19 @@ export class ReportController {
 
       const cashFlowReport = {
         summary: {
-          totalIncome: incomeTotal._sum.amount || 0,
-          totalExpense: expenseTotal._sum.amount || 0,
-          netCashFlow: (incomeTotal._sum.amount || 0) - (expenseTotal._sum.amount || 0)
+          totalIncome: moneyToNumber(incomeTotal._sum.amount),
+          totalExpense: moneyToNumber(expenseTotal._sum.amount),
+          netCashFlow: moneyToNumber(incomeTotal._sum.amount) - moneyToNumber(expenseTotal._sum.amount)
         },
         categoryCashFlow: categoryCashFlow.map(flow => ({
           category: categories.find(c => c.id === flow.categoryId),
           type: flow.type,
-          amount: flow._sum.amount || 0
+          amount: moneyToNumber(flow._sum.amount)
         })),
         customerCashFlow: customerCashFlow.map(flow => ({
           customer: customers.find(c => c.id === flow.customerId),
           type: flow.type,
-          amount: flow._sum.amount || 0
+          amount: moneyToNumber(flow._sum.amount)
         }))
       };
 
@@ -785,9 +786,9 @@ export class ReportController {
     ]);
 
     return {
-      totalIncome: incomeStats._sum.amount || 0,
-      totalExpense: expenseStats._sum.amount || 0,
-      netAmount: (incomeStats._sum.amount || 0) - (expenseStats._sum.amount || 0),
+      totalIncome: moneyToNumber(incomeStats._sum.amount),
+      totalExpense: moneyToNumber(expenseStats._sum.amount),
+      netAmount: moneyToNumber(incomeStats._sum.amount) - moneyToNumber(expenseStats._sum.amount),
       customerCount,
       transactionCount
     };
@@ -907,7 +908,7 @@ export class ReportController {
         }
 
         const collection = customerCollections.get(customerId);
-        collection.totalPaid += payment.amount;
+        collection.totalPaid += moneyToNumber(payment.amount);
         collection.paymentCount++;
         
         if (!collection.lastPaymentDate || payment.transactionDate > collection.lastPaymentDate) {
@@ -917,7 +918,7 @@ export class ReportController {
 
       const summary = {
         totalPayments: bankPayments.length,
-        totalAmount: bankPayments.reduce((sum, p) => sum + p.amount, 0),
+        totalAmount: bankPayments.reduce((sum, p) => sum + moneyToNumber(p.amount), 0),
         matchedPayments: bankPayments.filter(p => p.isMatched).length,
         unmatchedPayments: bankPayments.filter(p => !p.isMatched).length,
         uniqueCustomers: customerCollections.size
@@ -958,12 +959,12 @@ export class ReportController {
 
       const agingData = customers.map(customer => {
         const totalDebit = customer.transactions
-          .filter(t => t.type === 'CUSTOMER' && t.amount < 0)
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+          .filter(t => t.type === 'CUSTOMER' && moneyToNumber(t.amount) < 0)
+          .reduce((sum, t) => sum + Math.abs(moneyToNumber(t.amount)), 0);
 
         const totalCredit = customer.transactions
-          .filter(t => t.type === 'CUSTOMER' && t.amount > 0)
-          .reduce((sum, t) => sum + t.amount, 0);
+          .filter(t => t.type === 'CUSTOMER' && moneyToNumber(t.amount) > 0)
+          .reduce((sum, t) => sum + moneyToNumber(t.amount), 0);
 
         const balance = totalCredit - totalDebit;
         const lastTransaction = customer.transactions[0];
@@ -1141,15 +1142,15 @@ export class ReportController {
           isOverdue,
           overdueDays,
           overdueCategory,
-          amount: invoice.debit, // Fatura tutarı
-          remainingAmount: invoice.debit // Şimdilik tam tutar (ödeme eşleştirmesi eklenecek)
+          amount: moneyToNumber(invoice.debit), // Fatura tutarı
+          remainingAmount: moneyToNumber(invoice.debit) // Şimdilik tam tutar (ödeme eşleştirmesi eklenecek)
         };
       });
 
       // Özet istatistikler
       const summary = {
         totalInvoices: total,
-        totalAmount: invoicesWithPaymentStatus.reduce((sum, inv) => sum + inv.amount, 0),
+        totalAmount: invoicesWithPaymentStatus.reduce((sum, inv) => sum + moneyToNumber(inv.amount), 0),
         overdueInvoices: invoicesWithPaymentStatus.filter(inv => inv.isOverdue).length,
         overdueAmount: invoicesWithPaymentStatus
           .filter(inv => inv.isOverdue)
@@ -1488,12 +1489,12 @@ export class ReportController {
       const unpaidInvoices: any[] = [];
       
       // Faturaları tarihe göre sırala (eski önce) - FIFO için önemli
-      const sortedInvoices = [...allInvoices].sort((a: any, b: any) => 
+      const sortedInvoices = allInvoices.map(invoice => ({ ...invoice, debit: moneyToNumber(invoice.debit) })).sort((a: any, b: any) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
       // Ödemeleri tarihe göre sırala (eski önce) - FIFO için önemli
-      const sortedPayments = [...allPayments].sort((a: any, b: any) => 
+      const sortedPayments = allPayments.map(payment => ({ ...payment, credit: moneyToNumber(payment.credit) })).sort((a: any, b: any) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
@@ -1655,12 +1656,12 @@ export class ReportController {
       const paidInvoices: any[] = [];
       
       // Faturaları tarihe göre sırala (eski önce) - FIFO için önemli
-      const sortedInvoices = [...allInvoices].sort((a: any, b: any) => 
+      const sortedInvoices = allInvoices.map(invoice => ({ ...invoice, debit: moneyToNumber(invoice.debit) })).sort((a: any, b: any) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
       // Ödemeleri tarihe göre sırala (eski önce) - FIFO için önemli
-      const sortedPayments = [...allPayments].sort((a: any, b: any) => 
+      const sortedPayments = allPayments.map(payment => ({ ...payment, credit: moneyToNumber(payment.credit) })).sort((a: any, b: any) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
@@ -1791,8 +1792,8 @@ export class ReportController {
       // Özet istatistikler
       const summary = {
         totalPayments: payments.length,
-        totalAmount: payments.reduce((sum, payment) => sum + payment.credit, 0),
-        averagePayment: payments.length > 0 ? payments.reduce((sum, payment) => sum + payment.credit, 0) / payments.length : 0,
+        totalAmount: payments.reduce((sum, payment) => sum + moneyToNumber(payment.credit), 0),
+        averagePayment: payments.length > 0 ? payments.reduce((sum, payment) => sum + moneyToNumber(payment.credit), 0) / payments.length : 0,
         lastPaymentDate: payments.length > 0 ? payments[0].date : null,
         paymentMethods: {
           cash: payments.filter(p => p.documentType === 'Nakit').length,
@@ -1871,10 +1872,12 @@ export class ReportController {
           });
         }
         const entry = customerMap.get(tx.customerId);
-        if (tx.debit > 0) {
-          entry.invoices.push({ ...tx, remaining: tx.debit });
-        } else if (tx.credit > 0) {
-          entry.payments.push(tx);
+        const debit = moneyToNumber(tx.debit);
+        const credit = moneyToNumber(tx.credit);
+        if (debit > 0) {
+          entry.invoices.push({ ...tx, debit, remaining: debit });
+        } else if (credit > 0) {
+          entry.payments.push({ ...tx, credit });
         }
       });
 

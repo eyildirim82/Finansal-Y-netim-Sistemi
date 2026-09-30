@@ -1,4 +1,5 @@
 import { logError } from '../../shared/logger';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
@@ -140,7 +141,7 @@ export class CashController {
       const lastFlowDate = new Date(lastCashFlow.date);
       lastFlowDate.setHours(0, 0, 0, 0);
 
-      let currentBalance = lastCashFlow.closingBalance;
+      let currentBalance = moneyToNumber(lastCashFlow.closingBalance);
 
       // Eğer son kayıt bugün değilse, bugün için işlemler varsa hesapla
       if (lastFlowDate.getTime() !== today.getTime()) {
@@ -156,13 +157,13 @@ export class CashController {
 
         const todayIncome = todayTransactions
           .filter(t => t.type === 'INCOME')
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + moneyToNumber(t.amount), 0);
 
         const todayExpense = todayTransactions
           .filter(t => t.type === 'EXPENSE')
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + moneyToNumber(t.amount), 0);
 
-        currentBalance = lastCashFlow.closingBalance + todayIncome - todayExpense;
+        currentBalance = moneyToNumber(lastCashFlow.closingBalance) + todayIncome - todayExpense;
       }
 
       return res.json({
@@ -204,7 +205,7 @@ export class CashController {
         orderBy: { date: 'desc' }
       });
 
-      const expectedBalance = lastCashFlow ? lastCashFlow.closingBalance : 0;
+      const expectedBalance = moneyToNumber(lastCashFlow?.closingBalance);
       const actualBalance = Number(actualAmount);
       const difference = actualBalance - expectedBalance;
 
@@ -308,11 +309,11 @@ export class CashController {
       // İstatistikler
       const totalIncome = transactions
         .filter(t => t.type === 'INCOME')
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t) => sum + moneyToNumber(t.amount), 0);
 
       const totalExpense = transactions
         .filter(t => t.type === 'EXPENSE')
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t) => sum + moneyToNumber(t.amount), 0);
 
       const netCashFlow = totalIncome - totalExpense;
 

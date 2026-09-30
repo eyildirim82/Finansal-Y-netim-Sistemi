@@ -1,4 +1,5 @@
 import { logError } from '../../shared/logger';
+import { moneyToNumber } from '../../shared/prismaDecimalJson';
 import { PrismaClient } from '@prisma/client';
 
 /**
@@ -126,13 +127,13 @@ export class PaymentMatchingService {
       }
 
       // Tam tutar eşleşmesi
-      const exactMatch = recentTransactions.find(t => Math.abs(t.amount - transactionAmount) < 0.01);
+      const exactMatch = recentTransactions.find(t => Math.abs(moneyToNumber(t.amount) - transactionAmount) < 0.01);
       if (exactMatch) {
         return { match: true, confidence: 0.9, method: 'exact_amount_match' };
       }
 
       // Benzer tutar deseni (örn: 1000, 2000, 3000 gibi düzenli ödemeler)
-      const amounts = recentTransactions.map(t => t.amount).sort((a, b) => a - b);
+      const amounts = recentTransactions.map(t => moneyToNumber(t.amount)).sort((a, b) => a - b);
       const avgAmount = amounts.reduce((sum, amt) => sum + amt, 0) / amounts.length;
       
       // Ortalama tutara yakınlık kontrolü (%10 tolerans)

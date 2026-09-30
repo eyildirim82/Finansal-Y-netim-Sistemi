@@ -23,23 +23,32 @@ The repository is best understood as an **active engineering prototype**, not a 
 | --- | --- |
 | **Modular backend** | Separate Express modules for auth, transactions, customers, categories, imports, reports, extracts, banking and cash workflows |
 | **Financial workflows** | Income/expense records, customer accounts, statement transactions, balances, paid/unpaid invoice views and collections reporting |
+| **Exact money storage** | Financial amounts use PostgreSQL `DECIMAL(18,2)` through Prisma `Decimal`; confidence/probability scores remain floating point |
 | **Reporting** | Dashboard summaries, monthly/daily trends, category/customer reports, cash flow, aging, collections and invoice-oriented reporting routes |
 | **Import pipeline** | Authenticated Excel/CSV/customer imports with file-type and size validation |
 | **Banking experiments** | Authenticated email/PDF transaction processing, unmatched-payment workflows and payment matching |
 | **Frontend** | React application with dashboard, customers, transactions, reports, extracts, banking, cash and import screens |
 | **API hardening** | Helmet, CORS, compression, rate limiting, CUID-aware validation, centralized error handling and router-level banking authentication |
-| **Database lifecycle** | Prisma schema, PostgreSQL migration baseline and an explicit Compose migration service before application startup |
+| **Database lifecycle** | Prisma schema, PostgreSQL migration baseline, exact-money migration and an explicit Compose migration service before application startup |
 | **Verification** | GitHub Actions provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
 
 ## Current project status
 
-PostgreSQL 15 is now the canonical database runtime across the Prisma schema, committed migration baseline, Docker Compose and CI verification.
+PostgreSQL 15 is the canonical database runtime across the Prisma schema, committed migrations, Docker Compose and CI verification.
 
-The remaining pre-production concerns are more focused:
+Financial storage has also been hardened beyond the original prototype model:
 
-- several financial amount fields are still represented as Prisma `Float`; these should be migrated to exact decimal storage before treating the system as accounting-grade software;
+- monetary fields are persisted as `DECIMAL(18,2)` instead of binary floating point;
+- the migration explicitly rounds existing legacy floating-point values to two decimal places during conversion;
+- persisted balance updates use Prisma Decimal operations where values are written back to the database;
+- reporting and legacy frontend-facing API responses intentionally convert Decimal values to JavaScript numbers at the response/calculation boundary to preserve the existing numeric JSON contract;
+- confidence scores remain `Float` because they are ratios rather than money.
+
+The remaining pre-production concerns are now more focused:
+
 - banking/email integration depends on external configuration and provider-specific notification formats, so it should still be considered experimental despite its authenticated API boundary;
-- some debug-oriented surfaces and broader integration scenarios still need cleanup and coverage before deployment should be treated as mature.
+- some debug-oriented surfaces and broader integration scenarios still need cleanup and coverage before deployment should be treated as mature;
+- dependency/security maintenance remains active, particularly around the upload stack.
 
 For portfolio purposes, this repository is an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
 
@@ -69,6 +78,16 @@ PostgreSQL 15
 ```
 
 The Docker Compose stack also includes Redis, Nginx and monitoring services. A dedicated migration container runs `prisma migrate deploy` against a healthy PostgreSQL service, and the backend waits for that migration step to complete successfully before starting.
+
+## Money representation
+
+Business-money columns use Prisma `Decimal` backed by PostgreSQL `DECIMAL(18,2)`. This includes transaction amounts, imported statement debit/credit values, balances, bank amounts, matched-payment amounts and cash-flow totals.
+
+A dedicated migration converts the original `DOUBLE PRECISION` columns with explicit two-decimal rounding. Non-monetary fields such as matching confidence scores remain floating point.
+
+Prisma Decimal objects serialize to strings by default, while the existing frontend was designed around JSON numbers. The backend therefore applies an explicit compatibility policy: storage remains decimal, and values are converted to JavaScript numbers only where the existing API/reporting contract requires numeric JSON or number-based analysis.
+
+Regression coverage verifies representative values including `0.10` and `999999999999.99` round-trip through PostgreSQL with two-decimal precision.
 
 ## Domain model
 
@@ -211,7 +230,7 @@ GitHub Actions provides a repository-level verification gate for pull requests a
 
 ### Backend
 
-CI provisions a clean PostgreSQL 15 service and verifies the committed migration baseline before exercising the application:
+CI provisions a clean PostgreSQL 15 service and verifies all committed migrations before exercising the application:
 
 ```bash
 cd backend
@@ -221,6 +240,8 @@ npx prisma migrate deploy
 npm run build
 npm test
 ```
+
+The backend test suite includes an exact-money regression that writes representative Decimal values through Prisma and verifies their two-decimal round-trip from PostgreSQL.
 
 After build/tests pass, the workflow starts the compiled API and polls the real `/health` endpoint. This catches failures that only appear during application startup or database initialization.
 
@@ -266,6 +287,7 @@ The backend uses:
 - TypeScript
 - Prisma 5
 - PostgreSQL 15
+- PostgreSQL `DECIMAL(18,2)` for monetary storage
 - JWT + bcryptjs
 - express-validator
 - Multer
@@ -280,7 +302,7 @@ The backend uses:
 ├── .github/workflows/
 │   └── verify.yml             # PostgreSQL migration + backend verification + frontend lint/build
 ├── backend/
-│   ├── prisma/                 # PostgreSQL schema and migration baseline
+│   ├── prisma/                 # PostgreSQL schema and committed migrations
 │   ├── src/
 │   │   ├── modules/
 │   │   │   ├── auth/
@@ -350,7 +372,7 @@ npm run dev
 
 The highest-value next steps for this repository are now:
 
-1. migrate financial money fields from floating-point storage to exact decimal types;
+1. audit and harden backend dependencies, including migration away from Multer 1.x;
 2. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
 3. add deterministic demo data and portfolio screenshots;
 4. expand integration coverage around imports, reporting and banking workflows;

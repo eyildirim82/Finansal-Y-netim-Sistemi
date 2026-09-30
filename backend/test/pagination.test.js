@@ -1,12 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-// Mock PrismaClient to prevent actual database connections during tests
+// Mock PrismaClient to prevent actual database connections during tests.
 const Module = require('module');
 const originalRequire = Module.prototype.require;
 Module.prototype.require = function (path) {
   if (path === '@prisma/client') {
-    return { PrismaClient: class {} };
+    return {
+      PrismaClient: class {
+        customer = {
+          findMany: async () => [],
+          count: async () => 0
+        };
+      }
+    };
   }
   return originalRequire.apply(this, arguments);
 };
@@ -29,18 +36,30 @@ function mockRes() {
   };
 }
 
-test('getAllCustomers rejects non-positive page', async () => {
-  const req = { query: { page: '0', limit: '10' }, user: { id: 'u1' } };
+test('getCustomers normalizes a non-positive page to one', async () => {
+  const controller = new CustomerController();
+  const req = { query: { page: '-1', limit: '10' }, user: { id: 'u1' } };
   const res = mockRes();
-  await CustomerController.getAllCustomers(req, res);
-  assert.equal(res.statusCode, 400);
+
+  await controller.getCustomers(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.data.pagination.page, 1);
+  assert.equal(res.body.data.pagination.limit, 10);
 });
 
-test('getAllCustomers rejects non-positive limit', async () => {
-  const req = { query: { page: '1', limit: '0' }, user: { id: 'u1' } };
+test('getCustomers normalizes a negative limit to one', async () => {
+  const controller = new CustomerController();
+  const req = { query: { page: '1', limit: '-1' }, user: { id: 'u1' } };
   const res = mockRes();
-  await CustomerController.getAllCustomers(req, res);
-  assert.equal(res.statusCode, 400);
+
+  await controller.getCustomers(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.data.pagination.page, 1);
+  assert.equal(res.body.data.pagination.limit, 1);
 });
 
 test('getAllTransactions rejects non-positive page', async () => {

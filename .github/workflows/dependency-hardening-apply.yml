@@ -1,0 +1,153 @@
+name: Apply dependency hardening
+
+on:
+  push:
+    branches:
+      - fix/40-dependency-audit
+    paths:
+      - '.github/workflows/dependency-hardening-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/40-dependency-audit
+
+      - name: Update active upload/import code
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, expected=1):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f'{path}: expected {expected} occurrences, found {count}: {old[:100]!r}')
+              p.write_text(text.replace(old, new))
+
+          controller = 'backend/src/modules/imports/controller.ts'
+          replace(controller, "import * as XLSX from 'xlsx';", "import * as ExcelJS from 'exceljs';")
+          replace(
+              controller,
+              'export class ImportController {\n',
+              '''export class ImportController {\n  private static normalizeExcelCellValue(value: any): any {\n    if (value == null) return '';\n    if (value instanceof Date) return value;\n    if (typeof value !== 'object') return value;\n    if ('result' in value && value.result != null) return value.result;\n    if ('text' in value && value.text != null) return value.text;\n    if (Array.isArray(value.richText)) {\n      return value.richText.map((part: any) => part?.text ?? '').join('');\n    }\n    return String(value);\n  }\n\n  private static async readXlsxRows(filePath: string): Promise<any[][]> {\n    const workbook = new ExcelJS.Workbook();\n    await workbook.xlsx.readFile(filePath);\n    const worksheet = workbook.worksheets[0];\n    if (!worksheet) return [];\n\n    const rows: any[][] = [];\n    worksheet.eachRow({ includeEmpty: true }, (row) => {\n      const values: any[] = [];\n      for (let column = 1; column <= worksheet.columnCount; column++) {\n        values.push(ImportController.normalizeExcelCellValue(row.getCell(column).value));\n      }\n      rows.push(values);\n    });\n    return rows;\n  }\n\n'''
+          )
+          replace(controller, "if (!['.xlsx', '.xls'].includes(fileExtension))", "if (fileExtension !== '.xlsx')")
+          replace(controller, "message: 'Sadece Excel dosyaları (.xlsx, .xls) desteklenir'", "message: 'Sadece Excel (.xlsx) dosyaları desteklenir'")
+          replace(
+              controller,
+              '''// Excel dosyasını oku\n      const workbook = XLSX.readFile(filePath);\n      const sheetName = workbook.SheetNames[0];\n      const worksheet = workbook.Sheets[sheetName];\n      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });''',
+              '''// Excel dosyasını ExcelJS ile oku. Güvenlik nedeniyle eski binary .xls formatını desteklemiyoruz.\n      const data = await ImportController.readXlsxRows(filePath);'''
+          )
+          replace(controller, "if (!['.xlsx', '.xls', '.csv'].includes(fileExtension))", "if (!['.xlsx', '.csv'].includes(fileExtension))")
+          replace(controller, "message: 'Sadece Excel (.xlsx, .xls) ve CSV (.csv) dosyaları desteklenir'", "message: 'Sadece Excel (.xlsx) ve CSV (.csv) dosyaları desteklenir'")
+          replace(controller, "if (['.xlsx', '.xls'].includes(fileExtension))", "if (fileExtension === '.xlsx')")
+          replace(
+              controller,
+              '''// Excel dosyasını oku\n        const workbook = XLSX.readFile(filePath);\n        const sheetName = workbook.SheetNames[0];\n        const worksheet = workbook.Sheets[sheetName];\n        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });''',
+              '''// Excel dosyasını ExcelJS ile oku.\n        const rawData = await ImportController.readXlsxRows(filePath);'''
+          )
+
+          routes = 'backend/src/modules/imports/routes.ts'
+          replace(routes, "const allowedExtensions = ['.xlsx', '.xls', '.csv'];", "const allowedExtensions = ['.xlsx', '.csv'];")
+          replace(routes, "cb(new Error('Sadece Excel (.xlsx, .xls) ve CSV (.csv) dosyaları desteklenir'), false);", "cb(new Error('Sadece Excel (.xlsx) ve CSV (.csv) dosyaları desteklenir'), false);")
+
+          extracts = 'backend/src/modules/extracts/routes.ts'
+          replace(
+              extracts,
+              """const allowedTypes = [\n      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',\n      'application/vnd.ms-excel',\n      'text/csv'\n    ];\n    \n    if (allowedTypes.includes(file.mimetype)) {\n      cb(null, true);\n    } else {\n      cb(new Error('Sadece Excel ve CSV dosyaları kabul edilir'));\n    }""",
+              """const fileExtension = path.extname(file.originalname).toLowerCase();\n    const isXlsx = fileExtension === '.xlsx' &&\n      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';\n\n    if (isXlsx) {\n      cb(null, true);\n    } else {\n      cb(new Error('Sadece Excel (.xlsx) dosyaları kabul edilir'));\n    }"""
+          )
+
+          import_page = 'frontend/src/pages/Import.jsx'
+          replace(import_page, '<p className="text-sm text-gray-500">.xlsx, .xls</p>', '<p className="text-sm text-gray-500">.xlsx</p>')
+          replace(import_page, '<p className="text-sm text-gray-500">.csv, .txt</p>', '<p className="text-sm text-gray-500">.csv</p>')
+          replace(import_page, ": 'Excel (.xlsx, .xls) veya CSV (.csv) dosyaları desteklenir'", ": 'Excel (.xlsx) veya CSV (.csv) dosyaları desteklenir'")
+          replace(import_page, 'accept=".xlsx,.xls,.csv"', 'accept=".xlsx,.csv"')
+
+          extracts_page = 'frontend/src/pages/Extracts.jsx'
+          replace(extracts_page, 'accept=".xlsx,.xls"', 'accept=".xlsx"')
+          PY
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Remove no-fix SheetJS dependency
+        working-directory: backend
+        run: npm uninstall xlsx
+
+      - name: Upgrade upload and direct vulnerable dependencies
+        working-directory: backend
+        run: |
+          npm install multer@^2
+          npm install --save-dev @types/multer@latest
+          npm update axios express imapflow mailparser express-validator uuid
+
+      - name: Move legacy SQLite tooling out of production dependencies
+        working-directory: backend
+        run: |
+          npm uninstall better-sqlite3 sqlite3
+          npm install --save-dev better-sqlite3@^12.2.0 sqlite3@^5.1.7
+
+      - name: Build and test backend
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/placeholder?schema=public
+        run: |
+          npx prisma generate
+          npm run build
+          npm test
+
+      - name: Verify frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Enforce production audit high/critical gate
+        working-directory: backend
+        run: |
+          npm audit --omit=dev --json > /tmp/prod-audit.json || true
+          node <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/prod-audit.json', 'utf8'));
+          const counts = audit.metadata?.vulnerabilities || {};
+          console.log('PRODUCTION_AUDIT_COUNTS', JSON.stringify(counts));
+          const direct = Object.values(audit.vulnerabilities || {})
+            .filter(v => v.isDirect)
+            .map(v => ({ name: v.name, severity: v.severity, range: v.range, fixAvailable: v.fixAvailable }));
+          console.log('PRODUCTION_DIRECT_FINDINGS', JSON.stringify(direct, null, 2));
+          if ((counts.critical || 0) > 0 || (counts.high || 0) > 0) {
+            process.exit(1);
+          }
+          NODE
+
+      - name: Report full audit including dev tooling
+        working-directory: backend
+        run: |
+          npm audit --json > /tmp/full-audit.json || true
+          node <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/full-audit.json', 'utf8'));
+          console.log('FULL_AUDIT_COUNTS', JSON.stringify(audit.metadata?.vulnerabilities || {}));
+          NODE
+
+      - name: Commit hardened dependency set
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/package.json backend/package-lock.json backend/src/modules/imports/controller.ts backend/src/modules/imports/routes.ts backend/src/modules/extracts/routes.ts frontend/src/pages/Import.jsx frontend/src/pages/Extracts.jsx
+          git commit -m "security: harden upload and runtime dependencies"
+          git push origin HEAD:fix/40-dependency-audit

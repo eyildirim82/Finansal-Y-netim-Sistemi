@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { configurePrismaDecimalJson } from './shared/prismaDecimalJson';
 
 // Route'ları import et
 import authRoutes from './modules/auth/routes';
@@ -23,6 +24,9 @@ import { authMiddleware } from './shared/middleware/auth';
 
 // Environment variables
 dotenv.config();
+
+// Keep the existing numeric JSON contract while PostgreSQL stores money as DECIMAL.
+configurePrismaDecimalJson();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -83,4 +87,4 @@ app.listen(PORT, () => {
   console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
 });
 
-export default app; 
+export default app;

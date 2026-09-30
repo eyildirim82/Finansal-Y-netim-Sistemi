@@ -32,22 +32,6 @@ const Customers = () => {
     }
   }, [authLoading, isAuthenticated, navigate]);
 
-  // Eğer authentication yükleniyorsa veya kullanıcı giriş yapmamışsa loading göster
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        <span className="ml-4 text-lg">Yükleniyor...</span>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null; // navigate zaten çalışacak
-  }
-
-
-
   // Müşteri listesi
   const {
     data: customersData,
@@ -62,11 +46,9 @@ const Customers = () => {
     '/customers',
     { search: searchTerm, ...filters },
     {
-      enabled: true,
+      enabled: isAuthenticated && !authLoading,
     }
   );
-
-
 
   // Müşteri istatistikleri - tüm müşterileri dahil eder
   const queryString = new URLSearchParams(filters).toString();
@@ -74,11 +56,9 @@ const Customers = () => {
     ['customer-stats', filters],
     `/customers/stats?${queryString}`,
     {
-      enabled: true,
+      enabled: isAuthenticated && !authLoading,
     }
   );
-
-
 
   // Müşteri silme
   const deleteMutation = useApiDelete('/customers', {
@@ -100,6 +80,20 @@ const Customers = () => {
     successMessage: 'Seçili müşteriler başarıyla silindi',
     errorMessage: 'Seçili müşteriler silinirken hata oluştu',
   });
+
+  // Tüm hook'lar her render'da aynı sırada çağrıldıktan sonra auth durumunu render seviyesinde ele al.
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <span className="ml-4 text-lg">Yükleniyor...</span>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // navigate zaten çalışacak
+  }
 
   // Tüm müşterileri silme işlemi
   const handleDeleteAll = () => {
@@ -270,12 +264,8 @@ const Customers = () => {
   // İstatistik hesaplamaları - tüm müşterileri dahil eder
   const stats = statsData?.data?.data || { total: 0, active: 0, debt: 0, avgBalance: 0 };
 
-
-
   return (
     <div className="space-y-6">
-
-
       {/* Başlık ve Arama */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -406,25 +396,23 @@ const Customers = () => {
         </div>
       </div>
 
-      
-
-             {/* Müşteri Tablosu */}
-       <DataTable
-         data={Array.isArray(customersData?.data?.data?.data) ? customersData.data.data.data : []}
-         columns={columns}
-         pagination={{
-           ...customersData?.data?.data?.pagination,
-           sortBy: pagination?.sortBy || 'createdAt',
-           sortOrder: pagination?.sortOrder || 'desc'
-         }}
-         onPageChange={handlePageChange}
-         onSortChange={handleSortChange}
-         onLimitChange={handleLimitChange}
-         filters={filters}
-         onFilterChange={handleFilterChange}
-         loading={isLoading}
-         emptyMessage="Müşteri bulunamadı"
-       />
+      {/* Müşteri Tablosu */}
+      <DataTable
+        data={Array.isArray(customersData?.data?.data?.data) ? customersData.data.data.data : []}
+        columns={columns}
+        pagination={{
+          ...customersData?.data?.data?.pagination,
+          sortBy: pagination?.sortBy || 'createdAt',
+          sortOrder: pagination?.sortOrder || 'desc'
+        }}
+        onPageChange={handlePageChange}
+        onSortChange={handleSortChange}
+        onLimitChange={handleLimitChange}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        loading={isLoading}
+        emptyMessage="Müşteri bulunamadı"
+      />
 
       {/* Müşteri Ekleme/Düzenleme Modal */}
       <Modal
@@ -443,4 +431,4 @@ const Customers = () => {
   );
 };
 
-export default Customers; 
+export default Customers;

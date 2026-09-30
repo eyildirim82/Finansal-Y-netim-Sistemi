@@ -10,11 +10,25 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: finansal_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d finansal_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     defaults:
       run:
         working-directory: backend
     env:
-      DATABASE_URL: file:./ci.db
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finansal_ci?schema=public
       JWT_SECRET: ci-only-jwt-secret
       NODE_ENV: test
     steps:
@@ -34,11 +48,38 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Apply migrations to clean PostgreSQL
+        run: npx prisma migrate deploy
+
       - name: Build backend
         run: npm run build
 
       - name: Run backend tests
         run: npm test
+
+      - name: Smoke start backend
+        run: |
+          npm start > /tmp/finansal-backend.log 2>&1 &
+          pid=$!
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3001/health > /dev/null; then
+              kill "$pid" || true
+              wait "$pid" || true
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat /tmp/finansal-backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/finansal-backend.log
+          kill "$pid" || true
+          exit 1
+
+      - name: Validate Docker Compose configuration
+        working-directory: .
+        run: docker compose config --quiet
 
   frontend:
     name: Frontend

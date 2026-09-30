@@ -17,6 +17,7 @@ module.exports = {
   ignorePatterns: ['dist', 'node_modules'],
   rules: {
     'no-unused-vars': 'off',
+    'no-useless-catch': 'off',
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'off'
   }

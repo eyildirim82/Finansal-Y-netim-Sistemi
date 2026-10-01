@@ -21,16 +21,14 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    const allowedTypes = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'text/csv'
-    ];
-    
-    if (allowedTypes.includes(file.mimetype)) {
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    const isXlsx = fileExtension === '.xlsx' &&
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+    if (isXlsx) {
       cb(null, true);
     } else {
-      cb(new Error('Sadece Excel ve CSV dosyaları kabul edilir'));
+      cb(new Error('Sadece Excel (.xlsx) dosyaları kabul edilir'));
     }
   },
   limits: {

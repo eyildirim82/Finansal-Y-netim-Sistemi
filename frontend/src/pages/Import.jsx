@@ -151,7 +151,7 @@ const Import = () => {
               <FileSpreadsheet className="h-8 w-8 text-green-600 mr-3" />
               <div>
                 <h4 className="font-medium">Desteklenen Formatlar</h4>
-                <p className="text-sm text-gray-500">.xlsx, .xls</p>
+                <p className="text-sm text-gray-500">.xlsx</p>
               </div>
             </div>
             <ul className="text-sm text-gray-600 space-y-1">
@@ -172,7 +172,7 @@ const Import = () => {
               <FileText className="h-8 w-8 text-blue-600 mr-3" />
               <div>
                 <h4 className="font-medium">Desteklenen Formatlar</h4>
-                <p className="text-sm text-gray-500">.csv, .txt</p>
+                <p className="text-sm text-gray-500">.csv</p>
               </div>
             </div>
             <ul className="text-sm text-gray-600 space-y-1">
@@ -208,7 +208,7 @@ const Import = () => {
               <p className="text-sm text-gray-500">
                 {selectedFile 
                   ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`
-                  : 'Excel (.xlsx, .xls) veya CSV (.csv) dosyaları desteklenir'
+                  : 'Excel (.xlsx) veya CSV (.csv) dosyaları desteklenir'
                 }
               </p>
             </div>
@@ -218,7 +218,7 @@ const Import = () => {
                 type="file"
                 id="file-upload"
                 className="hidden"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.csv"
                 onChange={handleFileSelect}
               />
               <label

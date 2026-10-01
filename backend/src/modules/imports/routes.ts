@@ -19,13 +19,13 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: any, file: any, cb: any) => {
-  const allowedExtensions = ['.xlsx', '.xls', '.csv'];
+  const allowedExtensions = ['.xlsx', '.csv'];
   const fileExtension = path.extname(file.originalname).toLowerCase();
   
   if (allowedExtensions.includes(fileExtension)) {
     cb(null, true);
   } else {
-    cb(new Error('Sadece Excel (.xlsx, .xls) ve CSV (.csv) dosyaları desteklenir'), false);
+    cb(new Error('Sadece Excel (.xlsx) ve CSV (.csv) dosyaları desteklenir'), false);
   }
 };
 

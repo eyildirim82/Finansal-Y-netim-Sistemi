@@ -30,7 +30,7 @@ The repository is best understood as an **active engineering prototype**, not a 
 | **Frontend** | React application with dashboard, customers, transactions, reports, extracts, banking, cash and import screens |
 | **API hardening** | Helmet, CORS, compression, rate limiting, CUID-aware validation, centralized error handling and router-level banking authentication |
 | **Database lifecycle** | Prisma schema, PostgreSQL migration baseline, exact-money migration and an explicit Compose migration service before application startup |
-| **Verification** | GitHub Actions audits production backend dependencies for high/critical findings, provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
+| **Verification** | GitHub Actions gates high-severity production dependency findings for both backend and frontend, provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
 
 ## Current project status
 
@@ -48,7 +48,7 @@ The remaining pre-production concerns are now more focused:
 
 - banking/email integration depends on external configuration and provider-specific notification formats, so it should still be considered experimental despite its authenticated API boundary;
 - some debug-oriented surfaces and broader integration scenarios still need cleanup and coverage before deployment should be treated as mature;
-- production backend dependencies are gated against high/critical audit findings; remaining dependency maintenance includes moderate findings in the spreadsheet stack and a separate frontend dependency backlog.
+- backend and frontend production dependency trees are gated against high/critical audit findings; remaining dependency maintenance includes moderate backend spreadsheet-stack findings and a separate Vite 8 dev-tooling migration.
 
 For portfolio purposes, this repository is an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
 
@@ -253,9 +253,12 @@ The test runner discovers both JavaScript and TypeScript test files.
 ```bash
 cd frontend
 npm ci
+npm audit --omit=dev --audit-level=high
 npm run lint
 npm run build
 ```
+
+The frontend production dependency tree currently audits clean. The full development dependency tree still reports Vite 5 / esbuild dev-server advisories whose npm-proposed fix requires a Vite 8 major upgrade; that tooling migration is tracked separately rather than hidden by the production gate.
 
 The checked-in ESLint baseline includes React Hooks correctness checks and is run before the production Vite build.
 
@@ -301,7 +304,7 @@ The backend uses:
 
 ```text
 ├── .github/workflows/
-│   └── verify.yml             # PostgreSQL migration + backend verification + frontend lint/build
+│   └── verify.yml             # dependency audit + PostgreSQL/backend verification + frontend lint/build
 ├── backend/
 │   ├── prisma/                 # PostgreSQL schema and committed migrations
 │   ├── src/
@@ -374,10 +377,10 @@ npm run dev
 The highest-value next steps for this repository are now:
 
 1. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
-2. refresh or retire stale banking module documentation;
-3. add deterministic demo data and portfolio screenshots;
-4. expand integration coverage around imports, reporting and banking workflows;
-5. address the separate frontend dependency audit backlog and continue routine dependency maintenance.
+2. add deterministic demo data and portfolio screenshots;
+3. expand integration coverage around imports, reporting and banking workflows;
+4. migrate the frontend dev toolchain from Vite 5 to a patched Vite 8-compatible setup;
+5. continue routine dependency and framework maintenance.
 
 ## Why this repository is in the portfolio
 

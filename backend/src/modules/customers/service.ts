@@ -2,6 +2,8 @@ import { BaseService } from '../../shared/services/BaseService';
 import { ApiResponse, PaginationParams, PaginatedResponse } from '../../shared/types';
 import { Customer } from '@prisma/client';
 import { moneyToNumber } from '../../shared/prismaDecimalJson';
+import { CreateCustomerDto, UpdateCustomerDto } from './dto';
+import { randomUUID } from 'crypto';
 
 export class CustomerService extends BaseService {
   
@@ -18,7 +20,7 @@ export class CustomerService extends BaseService {
       type?: string;
       hasDebt?: boolean;
     },
-    userId?: string
+    userId: string
   ): Promise<ApiResponse<PaginatedResponse<Customer>>> {
     return this.safeDatabaseOperation(async () => {
       const { page, limit, sortBy, sortOrder } = this.validatePaginationParams(params);
@@ -26,7 +28,7 @@ export class CustomerService extends BaseService {
       const skip = (page - 1) * limit;
 
       // Kullanıcıya ve filtrelere özel sorgu
-      const whereClause: any = userId ? { userId } : {};
+      const whereClause: any = { userId };
       if (address) whereClause.address = { contains: address };
       if (accountType) whereClause.accountType = { contains: accountType };
       if (tag1) whereClause.tag1 = { contains: tag1 };
@@ -96,10 +98,10 @@ export class CustomerService extends BaseService {
   /**
    * ID ile müşteri getir
    */
-  async getCustomerById(id: string): Promise<ApiResponse<Customer>> {
+  async getCustomerById(id: string, userId: string): Promise<ApiResponse<Customer>> {
     return this.safeDatabaseOperation(async () => {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id },
+      const customer = await this.prisma.customer.findFirst({
+        where: { id, userId },
         include: {
           transactions: {
             include: {
@@ -122,12 +124,16 @@ export class CustomerService extends BaseService {
   /**
    * Yeni müşteri oluştur
    */
-  async createCustomer(data: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Customer>> {
+  async createCustomer(data: CreateCustomerDto, userId: string): Promise<ApiResponse<Customer>> {
     return this.safeDatabaseOperation(async () => {
       return await this.prisma.customer.create({
         data: {
           ...data,
-          dueDays: data.dueDays || 0
+          code: `CUST_${randomUUID()}`,
+          userId,
+          type: data.type ?? 'INDIVIDUAL',
+          dueDays: data.dueDays ?? 0,
+          isActive: data.isActive ?? true
         }
       });
     }, 'Müşteri oluşturulamadı');
@@ -136,26 +142,35 @@ export class CustomerService extends BaseService {
   /**
    * Müşteri güncelle
    */
-  async updateCustomer(id: string, data: Partial<Customer>): Promise<ApiResponse<Customer>> {
+  async updateCustomer(id: string, data: UpdateCustomerDto, userId: string): Promise<ApiResponse<Customer>> {
     return this.safeDatabaseOperation(async () => {
-      const customer = await this.prisma.customer.findUnique({ where: { id } });
+      const updated = await this.prisma.customer.updateMany({
+        where: { id, userId },
+        data
+      });
+
+      if (updated.count === 0) {
+        throw new Error('Müşteri bulunamadı');
+      }
+
+      const customer = await this.prisma.customer.findFirst({
+        where: { id, userId }
+      });
+
       if (!customer) {
         throw new Error('Müşteri bulunamadı');
       }
 
-      return await this.prisma.customer.update({
-        where: { id },
-        data
-      });
+      return customer;
     }, 'Müşteri güncellenemedi');
   }
 
   /**
    * Müşteri sil
    */
-  async deleteCustomer(id: string): Promise<ApiResponse<boolean>> {
+  async deleteCustomer(id: string, userId: string): Promise<ApiResponse<boolean>> {
     return this.safeDatabaseOperation(async () => {
-      const customer = await this.prisma.customer.findUnique({ where: { id } });
+      const customer = await this.prisma.customer.findFirst({ where: { id, userId } });
       if (!customer) {
         throw new Error('Müşteri bulunamadı');
       }
@@ -169,7 +184,11 @@ export class CustomerService extends BaseService {
         throw new Error('Bu müşteriye ait işlemler bulunduğu için silinemez');
       }
 
-      await this.prisma.customer.delete({ where: { id } });
+      const deleted = await this.prisma.customer.deleteMany({ where: { id, userId } });
+      if (deleted.count === 0) {
+        throw new Error('Müşteri bulunamadı');
+      }
+
       return true;
     }, 'Müşteri silinemedi');
   }
@@ -177,7 +196,7 @@ export class CustomerService extends BaseService {
   /**
    * Müşteri ara
    */
-  async searchCustomers(query: string, params: PaginationParams): Promise<ApiResponse<PaginatedResponse<Customer>>> {
+  async searchCustomers(query: string, params: PaginationParams, userId: string): Promise<ApiResponse<PaginatedResponse<Customer>>> {
     return this.safeDatabaseOperation(async () => {
       const { page, limit, sortBy, sortOrder } = this.validatePaginationParams(params);
       const skip = (page - 1) * limit;
@@ -185,6 +204,7 @@ export class CustomerService extends BaseService {
       const [customers, total] = await Promise.all([
         this.prisma.customer.findMany({
           where: {
+            userId,
             OR: [
               { name: { contains: query } },
               { phone: { contains: query } },
@@ -206,6 +226,7 @@ export class CustomerService extends BaseService {
         }),
         this.prisma.customer.count({
           where: {
+            userId,
             OR: [
               { name: { contains: query } },
               { phone: { contains: query } },
@@ -270,12 +291,13 @@ export class CustomerService extends BaseService {
   /**
    * Vadesi geçmiş müşterileri getir
    */
-  async getOverdueCustomers(): Promise<ApiResponse<Customer[]>> {
+  async getOverdueCustomers(userId: string): Promise<ApiResponse<Customer[]>> {
     return this.safeDatabaseOperation(async () => {
       const today = new Date();
       
       return await this.prisma.customer.findMany({
         where: {
+          userId,
           extractTransactions: {
             some: {
               dueDate: {
@@ -311,7 +333,7 @@ export class CustomerService extends BaseService {
       type?: string;
       hasDebt?: boolean;
     },
-    userId?: string
+    userId: string
   ): Promise<ApiResponse<{
     total: number;
     active: number;
@@ -326,7 +348,7 @@ export class CustomerService extends BaseService {
       const { address, accountType, tag1, tag2, isActive, type, hasDebt } = filters;
 
       // Kullanıcıya ve filtrelere özel sorgu
-      const whereClause: any = userId ? { userId } : {};
+      const whereClause: any = { userId };
       if (address) whereClause.address = { contains: address };
       if (accountType) whereClause.accountType = { contains: accountType };
       if (tag1) whereClause.tag1 = { contains: tag1 };
@@ -379,13 +401,13 @@ export class CustomerService extends BaseService {
   /**
    * Tüm müşterileri sil
    */
-  async deleteAllCustomers(userId?: string): Promise<ApiResponse<{ deletedCount: number }>> {
+  async deleteAllCustomers(userId: string): Promise<ApiResponse<{ deletedCount: number }>> {
     return this.safeDatabaseOperation(async () => {
       console.log('🗑️ CustomerService.deleteAllCustomers - Başladı');
       console.log('🗑️ CustomerService.deleteAllCustomers - userId:', userId);
       
       // Kullanıcıya özel müşterileri bul
-      const whereClause: any = userId ? { userId } : {};
+      const whereClause: any = { userId };
       console.log('🗑️ CustomerService.deleteAllCustomers - whereClause:', whereClause);
       
       // Önce silinecek müşteri sayısını al

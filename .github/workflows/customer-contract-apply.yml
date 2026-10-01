@@ -38,7 +38,30 @@ jobs:
           ref: fix/47-customer-dto-ownership
 
       - name: Apply exact customer contract codemod
-        run: python3 tools/customer_contract_codemod.py
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/customer_contract_codemod.py')
+          text = path.read_text()
+          old = "    expected=2,\n)"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one old match guard, found {text.count(old)}')
+          text = text.replace(old, "    expected=3,\n)", 1)
+
+          stale = '''replace(
+              service,
+              "      const whereClause: any = userId ? { userId } : {};",
+              "      const whereClause: any = { userId };",
+          )
+
+          controller = "backend/src/modules/customers/controller.ts"'''
+          if text.count(stale) != 1:
+              raise SystemExit(f'expected one stale follow-up replacement, found {text.count(stale)}')
+          text = text.replace(stale, 'controller = "backend/src/modules/customers/controller.ts"')
+          path.write_text(text)
+          PY
+          python3 tools/customer_contract_codemod.py
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

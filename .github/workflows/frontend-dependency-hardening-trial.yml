@@ -1,0 +1,70 @@
+name: Trial frontend runtime dependency hardening
+
+on:
+  push:
+    branches:
+      - fix/43-frontend-dependency-audit
+    paths:
+      - '.github/workflows/frontend-dependency-hardening-trial.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Trial direct runtime upgrades
+        run: |
+          npm install axios@latest react-router-dom@latest --package-lock-only --ignore-scripts
+          npm update --package-lock-only --ignore-scripts
+          npm ci --ignore-scripts
+          npm ls axios react-router-dom react-router @remix-run/router form-data follow-redirects lodash minimatch brace-expansion --all || true
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev --json > /tmp/prod-audit.json || true
+          node <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/prod-audit.json', 'utf8'));
+          const counts = audit.metadata?.vulnerabilities || {};
+          console.log('PRODUCTION_AUDIT_COUNTS', JSON.stringify(counts));
+          for (const v of Object.values(audit.vulnerabilities || {})) {
+            console.log(JSON.stringify({
+              name: v.name,
+              severity: v.severity,
+              direct: Boolean(v.isDirect),
+              range: v.range,
+              fixAvailable: v.fixAvailable,
+              via: v.via
+            }));
+          }
+          NODE
+
+      - name: Audit full dependency tree
+        run: |
+          npm audit --json > /tmp/full-audit.json || true
+          node <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/full-audit.json', 'utf8'));
+          console.log('FULL_AUDIT_COUNTS', JSON.stringify(audit.metadata?.vulnerabilities || {}));
+          NODE

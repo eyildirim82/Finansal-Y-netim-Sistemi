@@ -1,7 +1,7 @@
 import { logError } from '../../shared/logger';
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 import csv from 'csv-parser';
 import { createReadStream } from 'fs';
 import { validationResult } from 'express-validator';
@@ -11,6 +11,35 @@ import { v4 as uuidv4 } from 'uuid';
 const prisma = new PrismaClient();
 
 export class ImportController {
+  private static normalizeExcelCellValue(value: any): any {
+    if (value == null) return '';
+    if (value instanceof Date) return value;
+    if (typeof value !== 'object') return value;
+    if ('result' in value && value.result != null) return value.result;
+    if ('text' in value && value.text != null) return value.text;
+    if (Array.isArray(value.richText)) {
+      return value.richText.map((part: any) => part?.text ?? '').join('');
+    }
+    return String(value);
+  }
+
+  private static async readXlsxRows(filePath: string): Promise<any[][]> {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return [];
+
+    const rows: any[][] = [];
+    worksheet.eachRow({ includeEmpty: true }, (row) => {
+      const values: any[] = [];
+      for (let column = 1; column <= worksheet.columnCount; column++) {
+        values.push(ImportController.normalizeExcelCellValue(row.getCell(column).value));
+      }
+      rows.push(values);
+    });
+    return rows;
+  }
+
   // Excel dosyası yükleme ve işleme
   static async importExcel(req: Request, res: Response) {
     try {
@@ -25,18 +54,15 @@ export class ImportController {
       const filePath = req.file.path;
       const fileExtension = path.extname(req.file.originalname).toLowerCase();
 
-      if (!['.xlsx', '.xls'].includes(fileExtension)) {
+      if (fileExtension !== '.xlsx') {
         return res.status(400).json({
           success: false,
-          message: 'Sadece Excel dosyaları (.xlsx, .xls) desteklenir'
+          message: 'Sadece Excel (.xlsx) dosyaları desteklenir'
         });
       }
 
-      // Excel dosyasını oku
-      const workbook = XLSX.readFile(filePath);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      // Excel dosyasını ExcelJS ile oku. Güvenlik nedeniyle eski binary .xls formatını desteklemiyoruz.
+      const data = await ImportController.readXlsxRows(filePath);
 
       if (data.length < 2) {
         return res.status(400).json({
@@ -310,21 +336,18 @@ export class ImportController {
       const filePath = req.file.path;
       const fileExtension = path.extname(req.file.originalname).toLowerCase();
 
-      if (!['.xlsx', '.xls', '.csv'].includes(fileExtension)) {
+      if (!['.xlsx', '.csv'].includes(fileExtension)) {
         return res.status(400).json({
           success: false,
-          message: 'Sadece Excel (.xlsx, .xls) ve CSV (.csv) dosyaları desteklenir'
+          message: 'Sadece Excel (.xlsx) ve CSV (.csv) dosyaları desteklenir'
         });
       }
 
       let data: any[] = [];
 
-      if (['.xlsx', '.xls'].includes(fileExtension)) {
-        // Excel dosyasını oku
-        const workbook = XLSX.readFile(filePath);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      if (fileExtension === '.xlsx') {
+        // Excel dosyasını ExcelJS ile oku.
+        const rawData = await ImportController.readXlsxRows(filePath);
         
         if (rawData.length < 2) {
           return res.status(400).json({

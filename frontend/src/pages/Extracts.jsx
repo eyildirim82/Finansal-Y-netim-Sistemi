@@ -93,7 +93,7 @@ const Extracts = () => {
       </div>
 
       <form onSubmit={handleUpload} className="mb-4 flex gap-2 items-center">
-        <input type="file" accept=".xlsx,.xls" onChange={handleFileChange} />
+        <input type="file" accept=".xlsx" onChange={handleFileChange} />
         <button type="submit" disabled={uploading || !file} className="bg-primary-600 text-white px-4 py-2 rounded">
           {uploading ? 'Yükleniyor...' : 'Yükle'}
         </button>

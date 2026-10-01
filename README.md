@@ -25,12 +25,12 @@ The repository is best understood as an **active engineering prototype**, not a 
 | **Financial workflows** | Income/expense records, customer accounts, statement transactions, balances, paid/unpaid invoice views and collections reporting |
 | **Exact money storage** | Financial amounts use PostgreSQL `DECIMAL(18,2)` through Prisma `Decimal`; confidence/probability scores remain floating point |
 | **Reporting** | Dashboard summaries, monthly/daily trends, category/customer reports, cash flow, aging, collections and invoice-oriented reporting routes |
-| **Import pipeline** | Authenticated Excel/CSV/customer imports with file-type and size validation |
+| **Import pipeline** | Authenticated `.xlsx`/CSV/customer imports with file-type and size validation; legacy binary `.xls` uploads are not accepted |
 | **Banking experiments** | Authenticated email/PDF transaction processing, unmatched-payment workflows and payment matching |
 | **Frontend** | React application with dashboard, customers, transactions, reports, extracts, banking, cash and import screens |
 | **API hardening** | Helmet, CORS, compression, rate limiting, CUID-aware validation, centralized error handling and router-level banking authentication |
 | **Database lifecycle** | Prisma schema, PostgreSQL migration baseline, exact-money migration and an explicit Compose migration service before application startup |
-| **Verification** | GitHub Actions provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
+| **Verification** | GitHub Actions audits production backend dependencies for high/critical findings, provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
 
 ## Current project status
 
@@ -48,7 +48,7 @@ The remaining pre-production concerns are now more focused:
 
 - banking/email integration depends on external configuration and provider-specific notification formats, so it should still be considered experimental despite its authenticated API boundary;
 - some debug-oriented surfaces and broader integration scenarios still need cleanup and coverage before deployment should be treated as mature;
-- dependency/security maintenance remains active, particularly around the upload stack.
+- production backend dependencies are gated against high/critical audit findings; remaining dependency maintenance includes moderate findings in the spreadsheet stack and a separate frontend dependency backlog.
 
 For portfolio purposes, this repository is an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
 
@@ -154,7 +154,7 @@ DELETE /api/customers/:id
 
 ### Imports
 
-The import module accepts Excel and CSV uploads, limits files to 10 MB and validates supported extensions.
+The import module accepts modern Excel `.xlsx` and CSV uploads, limits files to 10 MB and validates supported extensions. Legacy binary `.xls` uploads are intentionally not accepted.
 
 ```text
 POST /api/imports/excel
@@ -235,6 +235,7 @@ CI provisions a clean PostgreSQL 15 service and verifies all committed migration
 ```bash
 cd backend
 npm ci
+npm audit --omit=dev --audit-level=high
 npx prisma generate
 npx prisma migrate deploy
 npm run build
@@ -290,8 +291,8 @@ The backend uses:
 - PostgreSQL `DECIMAL(18,2)` for monetary storage
 - JWT + bcryptjs
 - express-validator
-- Multer
-- ExcelJS / xlsx / csv-parser
+- Multer 2
+- a security-hardened ExcelJS-compatible `.xlsx` parser / csv-parser
 - IMAP and mail parsing libraries
 - PDF parsing
 - Pino logging
@@ -372,11 +373,11 @@ npm run dev
 
 The highest-value next steps for this repository are now:
 
-1. audit and harden backend dependencies, including migration away from Multer 1.x;
-2. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
+1. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
+2. refresh or retire stale banking module documentation;
 3. add deterministic demo data and portfolio screenshots;
 4. expand integration coverage around imports, reporting and banking workflows;
-5. continue dependency/security maintenance as the prototype matures.
+5. address the separate frontend dependency audit backlog and continue routine dependency maintenance.
 
 ## Why this repository is in the portfolio
 

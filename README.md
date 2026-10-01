@@ -30,7 +30,7 @@ The repository is best understood as an **active engineering prototype**, not a 
 | **Frontend** | React application with dashboard, customers, transactions, reports, extracts, banking, cash and import screens |
 | **API hardening** | Helmet, CORS, compression, rate limiting, CUID-aware validation, centralized error handling and router-level banking authentication |
 | **Database lifecycle** | Prisma schema, PostgreSQL migration baseline, exact-money migration and an explicit Compose migration service before application startup |
-| **Verification** | GitHub Actions gates high-severity production dependency findings for both backend and frontend, provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
+| **Verification** | GitHub Actions gates high-severity backend production dependency findings and moderate-or-higher findings across the full frontend tree, provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |
 
 ## Current project status
 
@@ -48,14 +48,14 @@ The remaining pre-production concerns are now more focused:
 
 - banking/email integration depends on external configuration and provider-specific notification formats, so it should still be considered experimental despite its authenticated API boundary;
 - some debug-oriented surfaces and broader integration scenarios still need cleanup and coverage before deployment should be treated as mature;
-- backend and frontend production dependency trees are gated against high/critical audit findings; remaining dependency maintenance includes moderate backend spreadsheet-stack findings and a separate Vite 8 dev-tooling migration.
+- the frontend dependency tree is fully audited in CI at moderate-or-higher severity; backend production dependencies remain gated at high/critical severity, with known moderate spreadsheet-stack findings documented separately.
 
 For portfolio purposes, this repository is an example of **business-domain modeling, full-stack feature development and iterative hardening**, rather than a finished finance platform.
 
 ## Architecture
 
 ```text
-React 18 + Vite
+React 18 + Vite 8 / Rolldown
        │
        ▼
 REST API
@@ -253,14 +253,14 @@ The test runner discovers both JavaScript and TypeScript test files.
 ```bash
 cd frontend
 npm ci
-npm audit --omit=dev --audit-level=high
+npm audit --audit-level=moderate
 npm run lint
 npm run build
 ```
 
-The frontend production dependency tree currently audits clean. The full development dependency tree still reports Vite 5 / esbuild dev-server advisories whose npm-proposed fix requires a Vite 8 major upgrade; that tooling migration is tracked separately rather than hidden by the production gate.
+The full frontend dependency tree currently audits clean after the migration to Vite 8.3.2 and `@vitejs/plugin-react` 6.1.1. CI uses Node.js 20.20.2 for the frontend, satisfying Vite 8's Node.js 20.19+ / 22.12+ runtime requirement, and treats future moderate-or-higher frontend audit findings as verification failures.
 
-The checked-in ESLint baseline includes React Hooks correctness checks and is run before the production Vite build.
+The Vite configuration uses Rolldown-native manual code-splitting groups for the React vendor, router and chart chunks. The checked-in ESLint baseline includes React Hooks correctness checks and is run before the production Vite build.
 
 The workflow also validates the Docker Compose configuration so service dependency changes fail early.
 
@@ -269,7 +269,7 @@ The workflow also validates the Docker Compose configuration so service dependen
 The frontend uses:
 
 - React 18
-- Vite
+- Vite 8 + Rolldown
 - React Router
 - React Query
 - React Hook Form
@@ -334,7 +334,7 @@ The backend uses:
 
 ### Requirements
 
-- Node.js 20+
+- Node.js 20.19+ (or Node.js 22.12+)
 - PostgreSQL 15+ for direct host development, or Docker Compose
 - npm
 
@@ -379,8 +379,7 @@ The highest-value next steps for this repository are now:
 1. remove or isolate remaining debug-only routes/screens before treating the app as deployable;
 2. add deterministic demo data and portfolio screenshots;
 3. expand integration coverage around imports, reporting and banking workflows;
-4. migrate the frontend dev toolchain from Vite 5 to a patched Vite 8-compatible setup;
-5. continue routine dependency and framework maintenance.
+4. continue routine dependency and framework maintenance.
 
 ## Why this repository is in the portfolio
 

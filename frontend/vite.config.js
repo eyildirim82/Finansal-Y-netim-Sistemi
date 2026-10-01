@@ -1,14 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// https://vitejs.dev/config/
+const configDir = fileURLToPath(new URL('.', import.meta.url))
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@/shared': path.resolve(__dirname, '../shared')
+      '@': path.resolve(configDir, './src'),
+      '@/shared': path.resolve(configDir, '../shared')
     }
   },
   server: {
@@ -18,9 +20,8 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
-            // Authorization header'ını doğru şekilde ilet
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             if (req.headers.authorization) {
               proxyReq.setHeader('Authorization', req.headers.authorization)
             }
@@ -32,15 +33,33 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          charts: ['recharts'],
-          utils: ['date-fns', 'clsx']
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vendor',
+              test: /node_modules[\\/](react|react-dom)[\\/]/,
+              priority: 40
+            },
+            {
+              name: 'router',
+              test: /node_modules[\\/]react-router(?:-dom)?[\\/]/,
+              priority: 30
+            },
+            {
+              name: 'charts',
+              test: /node_modules[\\/]recharts[\\/]/,
+              priority: 20
+            },
+            {
+              name: 'utils',
+              test: /node_modules[\\/](date-fns|clsx)[\\/]/,
+              priority: 10
+            }
+          ]
         }
       }
     }
   }
-}) 
+})

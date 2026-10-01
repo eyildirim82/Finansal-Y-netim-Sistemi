@@ -39,9 +39,10 @@ jobs:
           npm update axios express imapflow mailparser express-validator uuid --package-lock-only --ignore-scripts
           npm pkg delete dependencies.better-sqlite3 dependencies.sqlite3
           npm pkg set 'devDependencies.better-sqlite3=^12.2.0' 'devDependencies.sqlite3=^5.1.7'
+          npm pkg set 'overrides.jws=3.2.3' 'overrides.tmp=0.2.7' 'overrides.minimatch=3.1.4' 'overrides.brace-expansion=1.1.21'
           npm install --package-lock-only --ignore-scripts
           npm ci --ignore-scripts
-          npm ls exceljs multer axios express imapflow mailparser express-validator uuid --depth=0 || true
+          npm ls exceljs multer axios express imapflow mailparser express-validator uuid jws tmp minimatch brace-expansion --all || true
 
       - name: Start PostgreSQL 15
         run: |

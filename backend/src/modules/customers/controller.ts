@@ -1,12 +1,25 @@
 import { Request, Response } from 'express';
 import { CustomerService } from './service';
-import { validate, customerValidations } from '../../shared/middleware/validation';
+import { validate, createCustomerValidations, updateCustomerValidations } from '../../shared/middleware/validation';
+import { toCreateCustomerDto, toUpdateCustomerDto } from './dto';
 
 export class CustomerController {
   private customerService: CustomerService;
 
   constructor() {
     this.customerService = new CustomerService();
+  }
+
+  private requireUserId(req: Request, res: Response): string | null {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Kimlik doğrulaması gerekli'
+      });
+      return null;
+    }
+    return userId;
   }
 
   /**
@@ -29,8 +42,8 @@ export class CustomerController {
         hasDebt: typeof hasDebt === 'string' && hasDebt !== '' ? hasDebt === 'true' : undefined
       };
 
-      // Kullanıcı ID'sini request'ten al
-      const userId = req.user?.id;
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
 
       const result = await this.customerService.getCustomers(params, userId);
       
@@ -53,8 +66,10 @@ export class CustomerController {
    */
   getCustomerById = async (req: Request, res: Response) => {
     try {
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
       const { id } = req.params;
-      const result = await this.customerService.getCustomerById(id);
+      const result = await this.customerService.getCustomerById(id, userId);
       
       if (result.success) {
         return res.json(result);
@@ -74,10 +89,13 @@ export class CustomerController {
    * Yeni müşteri oluştur
    */
   createCustomer = [
-    validate(customerValidations),
+    validate(createCustomerValidations),
     async (req: Request, res: Response) => {
       try {
-        const result = await this.customerService.createCustomer(req.body);
+        const userId = this.requireUserId(req, res);
+        if (!userId) return;
+        const data = toCreateCustomerDto(req.body);
+        const result = await this.customerService.createCustomer(data, userId);
         
         if (result.success) {
           return res.status(201).json(result);
@@ -98,11 +116,14 @@ export class CustomerController {
    * Müşteri güncelle
    */
   updateCustomer = [
-    validate(customerValidations),
+    validate(updateCustomerValidations),
     async (req: Request, res: Response) => {
       try {
+        const userId = this.requireUserId(req, res);
+        if (!userId) return;
         const { id } = req.params;
-        const result = await this.customerService.updateCustomer(id, req.body);
+        const data = toUpdateCustomerDto(req.body);
+        const result = await this.customerService.updateCustomer(id, data, userId);
         
         if (result.success) {
           return res.json(result);
@@ -124,8 +145,10 @@ export class CustomerController {
    */
   deleteCustomer = async (req: Request, res: Response) => {
     try {
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
       const { id } = req.params;
-      const result = await this.customerService.deleteCustomer(id);
+      const result = await this.customerService.deleteCustomer(id, userId);
       
       if (result.success) {
         return res.json(result);
@@ -163,7 +186,9 @@ export class CustomerController {
         sortOrder: sortOrder as 'asc' | 'desc'
       };
 
-      const result = await this.customerService.searchCustomers(q as string, params);
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
+      const result = await this.customerService.searchCustomers(q as string, params, userId);
       
       if (result.success) {
         return res.json(result);
@@ -184,7 +209,9 @@ export class CustomerController {
    */
   getOverdueCustomers = async (req: Request, res: Response) => {
     try {
-      const result = await this.customerService.getOverdueCustomers();
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
+      const result = await this.customerService.getOverdueCustomers(userId);
       
       if (result.success) {
         return res.json(result);
@@ -221,8 +248,8 @@ export class CustomerController {
 
       console.log('📊 getCustomerStats - Filters:', filters);
 
-      // Kullanıcı ID'sini request'ten al
-      const userId = req.user?.id;
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
       console.log('📊 getCustomerStats - UserId:', userId);
 
       const result = await this.customerService.getCustomerStats(filters, userId);
@@ -253,8 +280,8 @@ export class CustomerController {
       console.log('🗑️ deleteAllCustomers - Request başladı');
       console.log('🗑️ deleteAllCustomers - User:', req.user);
       
-      // Kullanıcı ID'sini request'ten al
-      const userId = req.user?.id;
+      const userId = this.requireUserId(req, res);
+      if (!userId) return;
       console.log('🗑️ deleteAllCustomers - UserId:', userId);
 
       const result = await this.customerService.deleteAllCustomers(userId);

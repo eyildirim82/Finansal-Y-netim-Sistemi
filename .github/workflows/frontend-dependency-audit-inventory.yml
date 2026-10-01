@@ -1,0 +1,69 @@
+name: Inventory frontend dependency audit
+
+on:
+  push:
+    branches:
+      - fix/43-frontend-dependency-audit
+    paths:
+      - '.github/workflows/frontend-dependency-audit-inventory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Capture full audit inventory
+        run: |
+          npm audit --json > /tmp/full-audit.json || true
+          node <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/full-audit.json', 'utf8'));
+          console.log('FULL_AUDIT_COUNTS', JSON.stringify(audit.metadata?.vulnerabilities || {}));
+          const rows = Object.values(audit.vulnerabilities || {}).map(v => ({
+            name: v.name,
+            severity: v.severity,
+            direct: Boolean(v.isDirect),
+            range: v.range,
+            fixAvailable: v.fixAvailable,
+            via: (v.via || []).map(item => typeof item === 'string' ? item : `${item.name}:${item.title}`)
+          }));
+          const rank = { critical: 0, high: 1, moderate: 2, low: 3, info: 4 };
+          rows.sort((a, b) => Number(b.direct) - Number(a.direct) || (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9) || a.name.localeCompare(b.name));
+          console.log('DIRECT_FINDINGS');
+          rows.filter(r => r.direct).forEach(r => console.log(JSON.stringify(r)));
+          console.log('TRANSITIVE_HIGH_CRITICAL');
+          rows.filter(r => !r.direct && ['high', 'critical'].includes(r.severity)).forEach(r => console.log(JSON.stringify(r)));
+          NODE
+
+      - name: Capture production audit inventory
+        run: |
+          npm audit --omit=dev --json > /tmp/prod-audit.json || true
+          node <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/prod-audit.json', 'utf8'));
+          console.log('PRODUCTION_AUDIT_COUNTS', JSON.stringify(audit.metadata?.vulnerabilities || {}));
+          Object.values(audit.vulnerabilities || {})
+            .map(v => ({ name: v.name, severity: v.severity, direct: Boolean(v.isDirect), range: v.range, fixAvailable: v.fixAvailable, via: v.via }))
+            .forEach(row => console.log(JSON.stringify(row)));
+          NODE
+
+      - name: Show direct dependency tree
+        run: npm ls --depth=0 || true

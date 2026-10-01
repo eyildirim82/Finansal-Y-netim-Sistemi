@@ -207,6 +207,7 @@ model BankTransaction {
   id                String   @id @default(cuid())
   messageId         String   @unique
   bankCode          String   @default("YAPIKREDI")
+  transactionType   String?  // FAST, HAVALE, EFT; PDF/other imports may leave this null
   direction         String   // 'IN', 'OUT'
   accountIban       String
   maskedAccount     String?

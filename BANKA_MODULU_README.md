@@ -44,6 +44,7 @@ model BankTransaction {
   id                String   @id @default(cuid())
   messageId         String   @unique
   bankCode          String   @default("YAPIKREDI")
+  transactionType   String?
   direction         String
   accountIban       String
   maskedAccount     String?
@@ -173,7 +174,7 @@ Messages that do not match the expected patterns are appended to:
 logs/failed-fast-emails.log
 ```
 
-The provider parser recognizes a transient FAST / HAVALE / EFT transaction type during parsing. The current `BankTransaction` schema does not contain a dedicated `transactionType` column, so provider-type persistence should not be assumed from the database model alone.
+The provider parser recognizes FAST / HAVALE / EFT during parsing and persists that classification in the optional `BankTransaction.transactionType` field. PDF and other non-email import paths may leave the field `null`.
 
 ## Duplicate handling and matching
 
@@ -255,7 +256,6 @@ There is currently no dedicated end-to-end test that connects to a real producti
 - mailbox settings updated through the API are process-local rather than persisted configuration;
 - `secure` updates are not currently written back by `updateEmailSettings`;
 - realtime monitoring does not yet publish frontend WebSocket/SSE events and the stop hook does not explicitly terminate IDLE;
-- parser output includes a provider transaction type that is not represented as a dedicated `BankTransaction` column;
 - PDF parsing/ETL behavior depends on the uploaded statement format;
 - broader banking integration coverage is still needed.
 

@@ -1,0 +1,51 @@
+name: Sync transaction type documentation
+
+on:
+  push:
+    branches:
+      - fix/45-bank-transaction-type
+    paths:
+      - '.github/workflows/transaction-type-doc-sync.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/45-bank-transaction-type
+
+      - name: Update banking documentation
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('BANKA_MODULU_README.md')
+          text = path.read_text()
+
+          replacements = {
+            '  bankCode          String   @default("YAPIKREDI")\n  direction': '  bankCode          String   @default("YAPIKREDI")\n  transactionType   String?\n  direction',
+            'The provider parser recognizes a transient FAST / HAVALE / EFT transaction type during parsing. The current `BankTransaction` schema does not contain a dedicated `transactionType` column, so provider-type persistence should not be assumed from the database model alone.': 'The provider parser recognizes FAST / HAVALE / EFT during parsing and persists that classification in the optional `BankTransaction.transactionType` field. PDF and other non-email import paths may leave the field `null`.',
+            '- parser output includes a provider transaction type that is not represented as a dedicated `BankTransaction` column;\n': ''
+          }
+
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one match, found {count}: {old[:100]!r}')
+              text = text.replace(old, new)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit documentation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add BANKA_MODULU_README.md
+          git commit -m "docs: document persisted bank transaction type"
+          git push origin HEAD:fix/45-bank-transaction-type

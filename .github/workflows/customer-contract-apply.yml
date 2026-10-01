@@ -44,6 +44,7 @@ jobs:
 
           path = Path('tools/customer_contract_codemod.py')
           text = path.read_text()
+
           old = "    expected=2,\n)"
           if text.count(old) != 1:
               raise SystemExit(f'expected one old match guard, found {text.count(old)}')
@@ -59,6 +60,27 @@ jobs:
           if text.count(stale) != 1:
               raise SystemExit(f'expected one stale follow-up replacement, found {text.count(stale)}')
           text = text.replace(stale, 'controller = "backend/src/modules/customers/controller.ts"')
+
+          generic_create = '''replace(controller, "    validate(customerValidations),", "    validate(createCustomerValidations),", expected=1)'''
+          scoped_create = '''replace(
+              controller,
+              "  createCustomer = [\\n    validate(customerValidations),",
+              "  createCustomer = [\\n    validate(createCustomerValidations),",
+          )'''
+          if text.count(generic_create) != 1:
+              raise SystemExit(f'expected one generic create validator replacement, found {text.count(generic_create)}')
+          text = text.replace(generic_create, scoped_create, 1)
+
+          generic_update = '''replace(controller, "    validate(customerValidations),", "    validate(updateCustomerValidations),", expected=1)'''
+          scoped_update = '''replace(
+              controller,
+              "  updateCustomer = [\\n    validate(customerValidations),",
+              "  updateCustomer = [\\n    validate(updateCustomerValidations),",
+          )'''
+          if text.count(generic_update) != 1:
+              raise SystemExit(f'expected one generic update validator replacement, found {text.count(generic_update)}')
+          text = text.replace(generic_update, scoped_update, 1)
+
           path.write_text(text)
           PY
           python3 tools/customer_contract_codemod.py

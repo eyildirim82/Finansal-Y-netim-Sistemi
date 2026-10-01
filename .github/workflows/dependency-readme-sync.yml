@@ -1,0 +1,55 @@
+name: Sync dependency hardening documentation
+
+on:
+  push:
+    branches:
+      - fix/40-dependency-audit
+    paths:
+      - '.github/workflows/dependency-readme-sync.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/40-dependency-audit
+
+      - name: Update README
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('README.md')
+          text = path.read_text()
+
+          replacements = {
+            '| **Import pipeline** | Authenticated Excel/CSV/customer imports with file-type and size validation |': '| **Import pipeline** | Authenticated `.xlsx`/CSV/customer imports with file-type and size validation; legacy binary `.xls` uploads are not accepted |',
+            '| **Verification** | GitHub Actions provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |': '| **Verification** | GitHub Actions audits production backend dependencies for high/critical findings, provisions clean PostgreSQL 15, deploys migrations, builds/tests the backend, smoke-starts the API, then lints/builds the frontend |',
+            '- dependency/security maintenance remains active, particularly around the upload stack.': '- production backend dependencies are gated against high/critical audit findings; remaining dependency maintenance includes moderate findings in the spreadsheet stack and a separate frontend dependency backlog.',
+            'The import module accepts Excel and CSV uploads, limits files to 10 MB and validates supported extensions.': 'The import module accepts modern Excel `.xlsx` and CSV uploads, limits files to 10 MB and validates supported extensions. Legacy binary `.xls` uploads are intentionally not accepted.',
+            'npm ci\nnpx prisma generate': 'npm ci\nnpm audit --omit=dev --audit-level=high\nnpx prisma generate',
+            '- Multer\n- ExcelJS / xlsx / csv-parser': '- Multer 2\n- a security-hardened ExcelJS-compatible `.xlsx` parser / csv-parser',
+            '1. audit and harden backend dependencies, including migration away from Multer 1.x;\n2. remove or isolate remaining debug-only routes/screens before treating the app as deployable;\n3. add deterministic demo data and portfolio screenshots;\n4. expand integration coverage around imports, reporting and banking workflows;\n5. continue dependency/security maintenance as the prototype matures.': '1. remove or isolate remaining debug-only routes/screens before treating the app as deployable;\n2. refresh or retire stale banking module documentation;\n3. add deterministic demo data and portfolio screenshots;\n4. expand integration coverage around imports, reporting and banking workflows;\n5. address the separate frontend dependency audit backlog and continue routine dependency maintenance.'
+          }
+
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one README match, found {count}: {old[:90]!r}')
+              text = text.replace(old, new)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit README
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: reflect dependency hardening"
+          git push origin HEAD:fix/40-dependency-audit

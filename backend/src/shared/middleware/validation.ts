@@ -58,17 +58,40 @@ export const commonValidations = {
     body(field).isIn(values).withMessage(`Geçersiz değer. İzin verilen değerler: ${values.join(', ')}`)
 };
 
-/**
- * Müşteri validasyonları
- */
-export const customerValidations = [
-  body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Müşteri adı 2-100 karakter arasında olmalı'),
-  commonValidations.email,
-  commonValidations.phone,
+const customerPhoneValidation = body('phone')
+  .optional()
+  .custom((value) => value === '' || /^[\+]?[0-9\s\-\(\)]{10,}$/.test(String(value)))
+  .withMessage('Geçersiz telefon formatı');
+
+const optionalCustomerFields = [
+  customerPhoneValidation,
   body('address').optional().trim().isLength({ max: 500 }).withMessage('Adres 500 karakterden uzun olamaz'),
-  body('taxNumber').optional().trim().isLength({ max: 50 }).withMessage('Vergi numarası 50 karakterden uzun olamaz'),
-  body('dueDays').optional().isInt({ min: 0 }).withMessage('Vade günü negatif olamaz')
+  body('type').optional().isIn(['INDIVIDUAL', 'CORPORATE']).withMessage('Müşteri türü INDIVIDUAL veya CORPORATE olmalıdır'),
+  body('accountType').optional().trim().isLength({ max: 100 }).withMessage('Hesap türü 100 karakterden uzun olamaz'),
+  body('dueDays').optional().isInt({ min: 0, max: 365 }).withMessage('Vade günü 0-365 arasında olmalıdır').toInt(),
+  body('tag1').optional().trim().isLength({ max: 50 }).withMessage('Etiket 1 50 karakterden uzun olamaz'),
+  body('tag2').optional().trim().isLength({ max: 50 }).withMessage('Etiket 2 50 karakterden uzun olamaz'),
+  body('isActive').optional().isBoolean().withMessage('Aktiflik durumu boolean olmalıdır').toBoolean()
 ];
+
+/**
+ * Müşteri oluşturma validasyonları
+ */
+export const createCustomerValidations = [
+  body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Müşteri adı 2-100 karakter arasında olmalı'),
+  ...optionalCustomerFields
+];
+
+/**
+ * Müşteri güncelleme validasyonları
+ */
+export const updateCustomerValidations = [
+  body('name').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Müşteri adı 2-100 karakter arasında olmalı'),
+  ...optionalCustomerFields
+];
+
+// Geriye dönük import uyumluluğu için create kurallarını eski adla da dışa aktar.
+export const customerValidations = createCustomerValidations;
 
 /**
  * İşlem validasyonları

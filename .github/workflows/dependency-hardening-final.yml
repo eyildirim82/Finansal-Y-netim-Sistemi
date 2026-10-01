@@ -33,6 +33,7 @@ jobs:
         working-directory: backend
         run: |
           npm uninstall xlsx --package-lock-only --ignore-scripts
+          npm install 'exceljs@npm:exceljs-hardened@^5.0.0' --package-lock-only --ignore-scripts
           npm install multer@^2 --package-lock-only --ignore-scripts
           npm install --save-dev @types/multer@latest --package-lock-only --ignore-scripts
           npm update axios express imapflow mailparser express-validator uuid --package-lock-only --ignore-scripts
@@ -40,6 +41,7 @@ jobs:
           npm pkg set 'devDependencies.better-sqlite3=^12.2.0' 'devDependencies.sqlite3=^5.1.7'
           npm install --package-lock-only --ignore-scripts
           npm ci --ignore-scripts
+          npm ls exceljs multer axios express imapflow mailparser express-validator uuid --depth=0 || true
 
       - name: Start PostgreSQL 15
         run: |
@@ -86,10 +88,9 @@ jobs:
           const audit = JSON.parse(fs.readFileSync('/tmp/prod-audit.json', 'utf8'));
           const counts = audit.metadata?.vulnerabilities || {};
           console.log('PRODUCTION_AUDIT_COUNTS', JSON.stringify(counts));
-          const direct = Object.values(audit.vulnerabilities || {})
-            .filter(v => v.isDirect)
-            .map(v => ({ name: v.name, severity: v.severity, range: v.range, fixAvailable: v.fixAvailable }));
-          console.log('PRODUCTION_DIRECT_FINDINGS', JSON.stringify(direct, null, 2));
+          const findings = Object.values(audit.vulnerabilities || {})
+            .map(v => ({ name: v.name, severity: v.severity, direct: Boolean(v.isDirect), range: v.range, via: v.via, fixAvailable: v.fixAvailable }));
+          console.log('PRODUCTION_FINDINGS', JSON.stringify(findings, null, 2));
           if ((counts.critical || 0) > 0 || (counts.high || 0) > 0) process.exit(1);
           NODE
 

@@ -1,0 +1,88 @@
+name: Verify Vite 8 migration
+
+on:
+  push:
+    branches:
+      - fix/49-vite8
+    paths:
+      - '.github/workflows/vite8-migration-verify.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/49-vite8
+
+      - name: Setup Vite 8 compatible Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Refresh lockfile for declared toolchain
+        run: npm install --package-lock-only
+
+      - name: Clean install
+        run: npm ci
+
+      - name: Show selected toolchain
+        run: |
+          node --version
+          npm ls vite @vitejs/plugin-react esbuild || true
+
+      - name: Audit full frontend tree
+        run: npm audit --audit-level=moderate
+
+      - name: Audit production frontend tree
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        run: |
+          npm run build
+          find dist/assets -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Smoke Vite development server
+        run: |
+          npm run dev -- --host 127.0.0.1 > /tmp/finansal-vite.log 2>&1 &
+          pid=$!
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              kill "$pid" || true
+              wait "$pid" || true
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat /tmp/finansal-vite.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/finansal-vite.log
+          kill "$pid" || true
+          exit 1
+
+      - name: Commit verified lockfile
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Lockfile already up to date"
+            exit 0
+          fi
+          git commit -m "chore: refresh frontend lockfile for Vite 8"
+          git push origin HEAD:fix/49-vite8
